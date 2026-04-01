@@ -124,64 +124,71 @@ copyCodeBtn.addEventListener('click', () => {
     setTimeout(() => copyCodeBtn.innerHTML = originalContent, 2000);
 });
 
-restartBtn.addEventListener('click', () => {
-    if (isLocalMode) {
-        startLocalGame();
-    } else {
-        socket.emit('restart_game', myRoomCode);
-    }
-    restartBtn.style.display = 'none';
-    abandonBtn.innerText = 'ABANDONAR PARTIDA';
-});
-
-add5mBtn.addEventListener('click', () => {
-    if (isLocalMode) {
-        localTimers.w += 300;
-        localTimers.b += 300;
-        updateTimers(localTimers);
-    } else {
-        socket.emit('add_time', myRoomCode);
-    }
-});
-
-pauseTimerBtn.addEventListener('click', () => {
-    if (isLocalMode) {
-        toggleLocalPause();
-    } else {
-        socket.emit('toggle_pause', myRoomCode);
-    }
-});
-
-downloadSummaryBtn.addEventListener('click', () => {
-    const summary = {
-        date: new Date().toISOString(),
-        pgn: game.pgn(),
-        fen: game.fen(),
-        winner: isGameOver ? statusText.innerText : 'Ongoing',
-        finalTimers: isLocalMode ? localTimers : 'Online Data'
-    };
-    downloadJSON(summary, `sumula_${myRoomCode || 'local'}.json`);
-});
-
-saveGameBtn.addEventListener('click', () => {
-    const gameState = {
-        type: 'chess-save',
-        fen: game.fen(),
-        timers: localTimers,
-        settings: {
-            noClock: isNoClockMode,
-            paused: isTimerPaused
+if (restartBtn) {
+    restartBtn.addEventListener('click', () => {
+        if (isLocalMode) {
+            startLocalGame();
+        } else {
+            socket.emit('restart_game', myRoomCode);
         }
-    };
-    
-    // In online mode we'll wait for a server response eventually,
-    // but for now let's just save current state.
-    downloadJSON(gameState, `partida_${myRoomCode || 'local'}.json`);
-});
+    });
+}
 
-restoreSessionBtn.addEventListener('click', () => {
-    restoreSessionInput.click();
-});
+if (add5mBtn) {
+    add5mBtn.addEventListener('click', () => {
+        if (isLocalMode) {
+            localTimers.w += 300;
+            localTimers.b += 300;
+            updateTimers(localTimers);
+        } else {
+            socket.emit('add_time', myRoomCode);
+        }
+    });
+}
+
+if (pauseTimerBtn) {
+    pauseTimerBtn.addEventListener('click', () => {
+        if (isLocalMode) {
+            toggleLocalPause();
+        } else {
+            socket.emit('toggle_pause', myRoomCode);
+        }
+    });
+}
+
+if (downloadSummaryBtn) {
+    downloadSummaryBtn.addEventListener('click', () => {
+        const summary = {
+            date: new Date().toISOString(),
+            pgn: game.pgn(),
+            fen: game.fen(),
+            winner: isGameOver ? statusText.innerText : 'Em Andamento',
+            finalTimers: isLocalMode ? localTimers : 'Online'
+        };
+        downloadJSON(summary, `sumula_${myRoomCode || 'local'}.json`);
+    });
+}
+
+if (saveGameBtn) {
+    saveGameBtn.addEventListener('click', () => {
+        const gameState = {
+            type: 'chess-save',
+            fen: game.fen(),
+            timers: localTimers,
+            settings: {
+                noClock: isNoClockMode,
+                paused: isTimerPaused
+            }
+        };
+        downloadJSON(gameState, `partida_${myRoomCode || 'local'}.json`);
+    });
+}
+
+if (restoreSessionBtn) {
+    restoreSessionBtn.addEventListener('click', () => {
+        if (restoreSessionInput) restoreSessionInput.click();
+    });
+}
 
 restoreSessionInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -408,8 +415,9 @@ socket.on('game_start', ({ fen, players, timers, settings }) => {
     playerColor = me.color;
 
     initBoard(fen);
+    game.load(fen);
     if (!isNoClockMode) updateTimers(timers);
-    updateTurnIndicator('w');
+    updateTurnIndicator(game.turn());
 });
 
 socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
@@ -461,10 +469,11 @@ socket.on('game_restart', ({ fen, players, timers, settings }) => {
     playerColor = me.color;
 
     initBoard(fen);
+    game.load(fen);
     if (!isNoClockMode) updateTimers(timers);
     updatePGN();
     updateCapturedPieces();
-    updateTurnIndicator('w');
+    updateTurnIndicator(game.turn());
     
     restartBtn.style.display = 'none';
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
