@@ -25,7 +25,7 @@ function startGlobalTimer() {
   if (timerInterval) return;
   timerInterval = setInterval(() => {
     rooms.forEach((room, code) => {
-      if (room.status === 'playing') {
+      if (room.status === 'playing' && !room.settings?.noClock && !room.settings?.paused) {
         const turn = room.chess.turn();
         room.timers[turn]--;
         if (room.timers[turn] <= 0) {
@@ -50,7 +50,7 @@ io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   // User requests a new room code
-  socket.on('create_room', () => {
+  socket.on('create_room', (settings = {}) => {
     let code = generateCode();
     while (rooms.has(code)) {
       code = generateCode();
@@ -63,13 +63,41 @@ io.on('connection', (socket) => {
       timers: { w: 600, b: 600 }, // 10 minutes in seconds
       lastMoveTime: null,
       status: 'waiting', // waiting, playing, finished
-      winner: null
+      winner: null,
+      settings: {
+        noClock: !!settings.noClock
+      }
     };
 
     rooms.set(code, roomData);
     socket.join(code);
-    socket.emit('room_created', { code, color: 'w' });
-    console.log(`Room ${code} created by ${socket.id}`);
+    socket.emit('room_created', { code, color: 'w', settings: roomData.settings });
+    console.log(`Room ${code} created by ${socket.id} (noClock: ${roomData.settings.noClock})`);
+  });
+
+  socket.on('restore_game', (data) => {
+    if (!data || !data.fen) return;
+    
+    let code = generateCode();
+    while (rooms.has(code)) {
+      code = generateCode();
+    }
+
+    const roomData = {
+      id: code,
+      players: [{ id: socket.id, color: 'w' }], // Restorer is always White for now
+      chess: new Chess(data.fen),
+      timers: data.timers || { w: 600, b: 600 },
+      lastMoveTime: null,
+      status: 'waiting',
+      winner: null,
+      settings: data.settings || { noClock: false }
+    };
+
+    rooms.set(code, roomData);
+    socket.join(code);
+    socket.emit('room_created', { code, color: 'w', settings: roomData.settings, restored: true });
+    console.log(`Room ${code} restored from JSON by ${socket.id}`);
   });
 
   // User joins an existing room
@@ -94,7 +122,8 @@ io.on('connection', (socket) => {
     io.to(code).emit('game_start', {
       fen: room.chess.fen(),
       players: room.players,
-      timers: room.timers
+      timers: room.timers,
+      settings: room.settings
     });
 
     console.log(`User ${socket.id} joined room ${code}`);
@@ -114,11 +143,13 @@ io.on('connection', (socket) => {
       const result = room.chess.move(move);
       if (result) {
         // Update timers
-        const now = Date.now();
-        const elapsed = Math.floor((now - room.lastMoveTime) / 1000);
-        const color = player.color;
-        room.timers[color] = Math.max(0, room.timers[color] - elapsed);
-        room.lastMoveTime = now;
+        if (!room.settings?.noClock) {
+          const now = Date.now();
+          const elapsed = Math.floor((now - room.lastMoveTime) / 1000);
+          const color = player.color;
+          room.timers[color] = Math.max(0, room.timers[color] - elapsed);
+          room.lastMoveTime = now;
+        }
 
         // Check for game over
         let status = 'playing';
@@ -191,13 +222,35 @@ io.on('connection', (socket) => {
     io.to(code).emit('game_restart', {
       fen: room.chess.fen(),
       players: room.players,
-      timers: room.timers
+      timers: room.timers,
+      settings: room.settings
     });
   });
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     // Cleanup simple room logic could be added here
+  });
+
+  socket.on('add_time', (code) => {
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return;
+    
+    room.timers.w += 300;
+    room.timers.b += 300;
+    
+    io.to(code).emit('timer_update', { timers: room.timers });
+    console.log(`Room ${code}: Added 5m to both clocks.`);
+  });
+
+  socket.on('toggle_pause', (code) => {
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return;
+    
+    room.settings.paused = !room.settings.paused;
+    
+    io.to(code).emit('pause_updated', { paused: room.settings.paused });
+    console.log(`Room ${code}: Timers ${room.settings.paused ? 'paused' : 'resumed'}.`);
   });
 });
 

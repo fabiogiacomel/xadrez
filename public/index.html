@@ -67,7 +67,15 @@
 
                     <div class="divider">ou</div>
 
-                    <button id="local-game-btn" class="btn-secondary">JOGAR LOCALMENTE (MESMA TELA)</button>
+                    <div class="mode-buttons">
+                        <button id="local-game-btn" class="btn-secondary">JOGAR LOCAL (MESMA TELA)</button>
+                        <button id="no-clock-btn" class="btn-no-clock">JOGAR SEM RELÓGIO</button>
+                    </div>
+
+                    <div style="margin-top: 1rem;">
+                        <input type="file" id="restore-session-input" style="display: none;" accept=".json">
+                        <button id="restore-session-btn" class="btn-restore">CONTINUAR PARTIDA (UPLOAD JSON)</button>
+                    </div>
                 </div>
             </section>
 
@@ -125,6 +133,13 @@
                             Aguardando oponente...
                         </div>
                         
+                        <div id="game-mgmt-controls" class="mgmt-controls">
+                            <button id="add-5m-btn" class="btn-control" title="Adicionar 5 minutos para ambos">+5 Minutos</button>
+                            <button id="pause-timer-btn" class="btn-control" title="Pausar/Retomar relógios">Pausar Relógio</button>
+                            <button id="download-summary-btn" class="btn-control" title="Baixar súmula JSON">D. Súmula</button>
+                            <button id="save-game-btn" class="btn-control" title="Salvar partida atual p/ continuar">Save Game</button>
+                        </div>
+
                         <div class="action-buttons">
                             <button id="restart-btn" class="btn-primary" style="display: none;">JOGAR NOVAMENTE</button>
                             <button id="abandon-btn" class="btn-danger">ABANDONAR PARTIDA</button>

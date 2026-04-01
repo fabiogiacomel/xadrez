@@ -55,6 +55,7 @@ header h1 {
   font-size: 2.5rem;
   background: linear-gradient(to right, #10b981, #34d399);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: -0.02em;
   margin-top: 0;
@@ -326,6 +327,31 @@ input[type="text"]:focus {
 
 .btn-secondary:hover {
   background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.mode-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  width: 100%;
+}
+
+.btn-no-clock {
+  padding: 1rem;
+  background: rgba(139, 92, 246, 0.1);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-no-clock:hover {
+  background: #8b5cf6;
+  color: #fff;
   transform: translateY(-2px);
 }
 
@@ -601,6 +627,63 @@ footer {
   padding: 2rem 0;
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+/* Timer Management Controls */
+.mgmt-controls {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+@media (min-width: 600px) {
+  .mgmt-controls {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.btn-restore {
+  width: 100%;
+  padding: 0.8rem;
+  background: rgba(236, 72, 153, 0.1);
+  color: #ec4899;
+  border: 1px solid rgba(236, 72, 153, 0.2);
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-restore:hover {
+  background: #ec4899;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.btn-control {
+  padding: 0.75rem;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-control:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.btn-control.paused {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
 }
 
 /* Animations */

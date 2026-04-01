@@ -8,6 +8,8 @@ let isLocalMode = false;
 let shouldFlip = true;
 let localTimers = { w: 600, b: 600 };
 let localInterval = null;
+let isNoClockMode = false;
+let isTimerPaused = false;
 
 // DOM Elements
 const welcomeScreen = document.getElementById('welcome-screen');
@@ -27,6 +29,15 @@ const capturedPlayer = document.getElementById('captured-player');
 const capturedOpponent = document.getElementById('captured-opponent');
 const flipToggleContainer = document.getElementById('flip-toggle-container');
 const flipToggle = document.getElementById('flip-toggle');
+const noClockBtn = document.getElementById('no-clock-btn');
+const timersContainer = document.querySelector('.timers');
+const add5mBtn = document.getElementById('add-5m-btn');
+const pauseTimerBtn = document.getElementById('pause-timer-btn');
+const mgmtControls = document.getElementById('game-mgmt-controls');
+const downloadSummaryBtn = document.getElementById('download-summary-btn');
+const saveGameBtn = document.getElementById('save-game-btn');
+const restoreSessionBtn = document.getElementById('restore-session-btn');
+const restoreSessionInput = document.getElementById('restore-session-input');
 
 // Menu Elements
 const menuBtn = document.getElementById('menu-btn');
@@ -40,10 +51,13 @@ const menuAbout = document.getElementById('menu-about');
 // 1. Initial Room Creation (Online)
 socket.emit('create_room');
 
-socket.on('room_created', ({ code, color }) => {
+socket.on('room_created', ({ code, color, settings, restored }) => {
     myRoomCode = code;
     myRoomCodeDisplay.innerText = code;
     if (!isLocalMode) playerColor = color;
+    if (restored) {
+        statusText.innerText = 'Partida Restaurada! Aguardando oponente...';
+    }
 });
 
 // 2. Navigation & Mode Selection
@@ -57,7 +71,15 @@ joinBtn.addEventListener('click', () => {
 });
 
 localGameBtn.addEventListener('click', () => {
+    isNoClockMode = false;
+    timersContainer.style.display = 'grid';
     startLocalGame();
+});
+
+noClockBtn.addEventListener('click', () => {
+    isNoClockMode = true;
+    timersContainer.style.display = 'none';
+    socket.emit('create_room', { noClock: true });
 });
 
 abandonBtn.addEventListener('click', () => {
@@ -95,6 +117,77 @@ restartBtn.addEventListener('click', () => {
     }
     restartBtn.style.display = 'none';
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
+});
+
+add5mBtn.addEventListener('click', () => {
+    if (isLocalMode) {
+        localTimers.w += 300;
+        localTimers.b += 300;
+        updateTimers(localTimers);
+    } else {
+        socket.emit('add_time', myRoomCode);
+    }
+});
+
+pauseTimerBtn.addEventListener('click', () => {
+    if (isLocalMode) {
+        toggleLocalPause();
+    } else {
+        socket.emit('toggle_pause', myRoomCode);
+    }
+});
+
+downloadSummaryBtn.addEventListener('click', () => {
+    const summary = {
+        date: new Date().toISOString(),
+        pgn: game.pgn(),
+        fen: game.fen(),
+        winner: isGameOver ? statusText.innerText : 'Ongoing',
+        finalTimers: isLocalMode ? localTimers : 'Online Data'
+    };
+    downloadJSON(summary, `sumula_${myRoomCode || 'local'}.json`);
+});
+
+saveGameBtn.addEventListener('click', () => {
+    const gameState = {
+        type: 'chess-save',
+        fen: game.fen(),
+        timers: localTimers,
+        settings: {
+            noClock: isNoClockMode,
+            paused: isTimerPaused
+        }
+    };
+    
+    // In online mode we'll wait for a server response eventually,
+    // but for now let's just save current state.
+    downloadJSON(gameState, `partida_${myRoomCode || 'local'}.json`);
+});
+
+restoreSessionBtn.addEventListener('click', () => {
+    restoreSessionInput.click();
+});
+
+restoreSessionInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (data.type !== 'chess-save') {
+                alert('JSON inválido ou formato não suportado.');
+                return;
+            }
+            
+            // Restoring
+            socket.emit('restore_game', data);
+        } catch (err) {
+            alert('Erro ao ler o arquivo.');
+        }
+    };
+    reader.readAsText(file);
 });
 
 // 3. Menu Logic
@@ -141,6 +234,8 @@ function startLocalGame() {
     welcomeScreen.classList.remove('active');
     gameScreen.classList.add('active');
     flipToggleContainer.style.display = 'flex';
+    mgmtControls.style.display = 'grid';
+    timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
     
     initBoard();
@@ -148,17 +243,23 @@ function startLocalGame() {
     updateTurnIndicator('w');
     updateCapturedPieces();
     updatePGN();
-    startLocalTimer();
+    if (!isNoClockMode) startLocalTimer();
 }
 
 function resetToMenu() {
     isLocalMode = false;
     isGameOver = false;
+    isTimerPaused = false;
     stopLocalTimer();
+    updatePauseUI(false);
+    
     welcomeScreen.classList.add('active');
     gameScreen.classList.remove('active');
     flipToggleContainer.style.display = 'none';
+    mgmtControls.style.display = 'none';
     restartBtn.style.display = 'none';
+    isNoClockMode = false;
+    timersContainer.style.display = 'grid';
     socket.emit('create_room');
 }
 
@@ -270,9 +371,16 @@ function stopLocalTimer() {
 }
 
 // 7. Socket Events (Online Mode)
-socket.on('game_start', ({ fen, players, timers }) => {
+socket.on('game_start', ({ fen, players, timers, settings }) => {
     isLocalMode = false;
+    isNoClockMode = settings?.noClock || false;
+    isTimerPaused = settings?.paused || false;
+    
     flipToggleContainer.style.display = 'none';
+    mgmtControls.style.display = 'grid';
+    timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
+    updatePauseUI(isTimerPaused);
+    
     welcomeScreen.classList.remove('active');
     gameScreen.classList.add('active');
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
@@ -281,7 +389,7 @@ socket.on('game_start', ({ fen, players, timers }) => {
     playerColor = me.color;
 
     initBoard(fen);
-    updateTimers(timers);
+    if (!isNoClockMode) updateTimers(timers);
     updateTurnIndicator('w');
 });
 
@@ -297,7 +405,7 @@ socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
         $(`#board .square-${move.to}`).addClass('highlight-last-move');
     }
 
-    updateTimers(timers);
+    if (!isNoClockMode) updateTimers(timers);
     updatePGN();
     updateCapturedPieces();
     updateTurnIndicator(turn);
@@ -308,24 +416,33 @@ socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
 });
 
 socket.on('timer_update', ({ timers }) => {
-    if (!isLocalMode) updateTimers(timers);
+    if (!isLocalMode) {
+        localTimers = timers;
+        updateTimers(timers);
+    }
 });
 
 socket.on('game_over_time', ({ winner }) => {
     if (!isLocalMode) endGame(winner, true);
 });
 
-socket.on('game_restart', ({ fen, players, timers }) => {
+socket.on('game_restart', ({ fen, players, timers, settings }) => {
     if (isLocalMode) return;
     
     game.reset();
     isGameOver = false;
+    isNoClockMode = settings?.noClock || false;
+    isTimerPaused = settings?.paused || false;
+    
+    timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
+    mgmtControls.style.display = 'grid';
+    updatePauseUI(isTimerPaused);
     
     const me = players.find(p => p.id === socket.id);
     playerColor = me.color;
 
     initBoard(fen);
-    updateTimers(timers);
+    if (!isNoClockMode) updateTimers(timers);
     updatePGN();
     updateCapturedPieces();
     updateTurnIndicator('w');
@@ -343,7 +460,44 @@ socket.on('error_message', (msg) => {
     }, 3000);
 });
 
+socket.on('pause_updated', ({ paused }) => {
+    isTimerPaused = paused;
+    updatePauseUI(paused);
+});
+
 // 8. Helpers
+function updatePauseUI(paused) {
+    if (paused) {
+        pauseTimerBtn.innerText = 'Retomar Relógio';
+        pauseTimerBtn.classList.add('paused');
+        statusText.innerText = 'Relógios Pausados';
+    } else {
+        pauseTimerBtn.innerText = 'Pausar Relógio';
+        pauseTimerBtn.classList.remove('paused');
+        if (game) updateTurnIndicator(game.turn());
+    }
+}
+
+function toggleLocalPause() {
+    isTimerPaused = !isTimerPaused;
+    updatePauseUI(isTimerPaused);
+    if (!isTimerPaused) {
+        startLocalTimer();
+    } else {
+        stopLocalTimer();
+    }
+}
+
+function downloadJSON(obj, filename) {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(obj, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", filename);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
 function updateTimers(timers) {
     document.querySelector('#timer-white .time').innerText = formatTime(timers.w);
     document.querySelector('#timer-black .time').innerText = formatTime(timers.b);
