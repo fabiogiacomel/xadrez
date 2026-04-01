@@ -2,12 +2,12 @@
   "name": "xadrez.giacomel.art",
   "version": "1.0.0",
   "description": "Premium real-time chess application for Hostinger",
-  "main": "server.js",
+  "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node server.js",
+    "start": "node index.js",
     "build": "echo 'No build step required for this project'"
   },
   "keywords": [
