@@ -51,12 +51,27 @@ const menuAbout = document.getElementById('menu-about');
 // 1. Initial Room Creation (Online)
 socket.emit('create_room');
 
-socket.on('room_created', ({ code, color, settings, restored }) => {
+socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
     myRoomCode = code;
     myRoomCodeDisplay.innerText = code;
     if (!isLocalMode) playerColor = color;
+    
     if (restored) {
+        isNoClockMode = settings?.noClock || false;
+        isTimerPaused = settings?.paused || false;
+        
+        welcomeScreen.classList.remove('active');
+        gameScreen.classList.add('active');
+        mgmtControls.style.display = 'grid';
+        timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
+        
         statusText.innerText = 'Partida Restaurada! Aguardando oponente...';
+        initBoard(fen);
+        game.load(fen); // Load FEN into local chess instance
+        if (!isNoClockMode) updateTimers(timers);
+        updatePauseUI(isTimerPaused);
+        updatePGN();
+        updateCapturedPieces();
     }
 });
 
@@ -176,15 +191,19 @@ restoreSessionInput.addEventListener('change', (e) => {
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
+            console.log('JSON carregado:', data);
+            
             if (data.type !== 'chess-save') {
-                alert('JSON inválido ou formato não suportado.');
+                alert('Erro: O arquivo não é um backup válido de partida (.json).');
                 return;
             }
             
             // Restoring
+            statusText.innerText = 'Restaurando partida...';
             socket.emit('restore_game', data);
         } catch (err) {
-            alert('Erro ao ler o arquivo.');
+            console.error('Erro ao ler JSON:', err);
+            alert('Erro ao processar o arquivo JSON. Verifique se o formato está correto.');
         }
     };
     reader.readAsText(file);

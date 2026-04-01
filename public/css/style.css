@@ -41,13 +41,13 @@ body {
 header {
   margin-bottom: 2rem;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
+  padding: 1rem 0;
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
 }
 
 header h1 {

@@ -96,7 +96,14 @@ io.on('connection', (socket) => {
 
     rooms.set(code, roomData);
     socket.join(code);
-    socket.emit('room_created', { code, color: 'w', settings: roomData.settings, restored: true });
+    socket.emit('room_created', { 
+      code, 
+      color: 'w', 
+      settings: roomData.settings, 
+      restored: true,
+      fen: data.fen,
+      timers: roomData.timers
+    });
     console.log(`Room ${code} restored from JSON by ${socket.id}`);
   });
 
