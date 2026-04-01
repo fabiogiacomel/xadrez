@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -148,6 +149,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('resign_game', (code) => {
+    const room = rooms.get(code);
+    if (!room || room.status !== 'playing') return;
+
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player) return;
+
+    room.status = 'finished';
+    room.winner = player.color === 'w' ? 'Black (Resignation)' : 'White (Resignation)';
+
+    io.to(code).emit('move_made', {
+      fen: room.chess.fen(),
+      move: null,
+      timers: room.timers,
+      turn: room.chess.turn(),
+      status: 'finished',
+      winner: room.winner
+    });
+  });
+
   socket.on('restart_game', (code) => {
     const room = rooms.get(code);
     if (!room || room.status !== 'finished') return;
@@ -181,6 +202,8 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const HOST = '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+    console.log(`Server running on http://${HOST}:${PORT}`);
 });

@@ -3,75 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xadrez Online | giacomel.art</title>
+    <title>Xadrez Premium | Giacomel Art</title>
+    <meta name="description" content="Uma experiência de xadrez online moderna, rápida e visualmente deslumbrante. Jogue com amigos usando códigos de sala.">
+    
+    <!-- Libraries -->
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <link rel="stylesheet" href="css/style.css">
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
         <header>
-            <h1>Xadrez.Giacomel</h1>
+            <div class="header-content">
+                <button id="menu-btn" class="hamburger-btn">
+                    <div class="hamburger-icon">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </button>
+                <h1 id="brand-title">Xadrez.Giacomel</h1>
+            </div>
         </header>
+
+        <nav id="side-menu" class="side-menu">
+            <div class="menu-header">
+                <h2>Menu</h2>
+                <button id="close-menu" class="close-btn">&times;</button>
+            </div>
+            <ul class="menu-links">
+                <li><a href="#" id="menu-home">Início</a></li>
+                <li><a href="#" id="menu-local">Partida Local</a></li>
+                <li><a href="#" id="menu-about">Sobre o Projeto</a></li>
+                <li><a href="https://giacomel.art" target="_blank">Giacomel Art</a></li>
+            </ul>
+        </nav>
+        <div id="menu-overlay" class="menu-overlay"></div>
 
         <main>
             <!-- Screen 1: Welcome & Code Sharing -->
             <section id="welcome-screen" class="active">
-                <div class="card premium">
-                    <h2>Bem-vindo</h2>
-                    <p>Compartilhe seu código com um adversário para começar.</p>
+                <div class="card">
+                    <h2>Prepare o Tabuleiro</h2>
+                    <p>Compartilhe seu código exclusivo com um adversário ou entre em uma partida existente.</p>
                     
                     <div class="code-display">
-                        <span id="my-room-code">Carregando...</span>
-                        <button id="copy-code-btn" title="Copiar código">📋</button>
+                        <span id="my-room-code">......</span>
+                        <button id="copy-code-btn" title="Copiar código">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
                     </div>
 
                     <div class="divider">ou</div>
 
                     <div class="join-section">
-                        <input type="text" id="join-code-input" placeholder="Insira o código do adversário">
-                        <button id="join-btn" class="btn-primary">Entrar na Partida</button>
+                        <input type="text" id="join-code-input" placeholder="INSIRA O CÓDIGO" maxlength="6">
+                        <button id="join-btn" class="btn-primary">ENTRAR NA PARTIDA</button>
                     </div>
+
+                    <div class="divider">ou</div>
+
+                    <button id="local-game-btn" class="btn-secondary">JOGAR LOCALMENTE (MESMA TELA)</button>
                 </div>
             </section>
 
             <!-- Screen 2: Game Board -->
             <section id="game-screen">
                 <div class="game-layout">
-                    <div class="board-container">
-                        <div id="board" style="width: 100%; max-width: 600px;"></div>
+                    <div class="board-column">
+                        <div class="board-container">
+                            <div id="board" style="width: 100%;"></div>
+                        </div>
                     </div>
                     
                     <div class="game-info">
+                        <!-- Timers Area -->
                         <div class="timers">
                             <div id="timer-white" class="timer">
-                                <span class="label">Brancas:</span>
+                                <span class="label">Peças Brancas</span>
                                 <span class="time">10:00</span>
                             </div>
                             <div id="timer-black" class="timer">
-                                <span class="label">Pretas:</span>
+                                <span class="label">Peças Pretas</span>
                                 <span class="time">10:00</span>
                             </div>
                         </div>
 
+                        <!-- Captured Pieces -->
+                        <div class="captured-pieces">
+                            <div id="captured-top">
+                                <h4>Oponente</h4>
+                                <div class="captured-container" id="captured-opponent"></div>
+                            </div>
+                            <div style="height: 10px;"></div>
+                            <div id="captured-bottom">
+                                <h4>Você</h4>
+                                <div class="captured-container" id="captured-player"></div>
+                            </div>
+                        </div>
+
+                        <!-- Move History -->
                         <div class="move-history">
                             <h3>Histórico de Jogadas</h3>
-                            <div id="pgn-log" class="log-content"></div>
+                            <div id="pgn-log"></div>
+                        </div>
+
+                        <!-- Settings & Status -->
+                        <div id="flip-toggle-container" class="toggle-container" style="display: none; justify-content: center; margin-bottom: 0.5rem;">
+                            <span>Girar Automático</span>
+                            <label class="switch">
+                                <input type="checkbox" id="flip-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
                         </div>
 
                         <div class="game-status" id="status-text">
                             Aguardando oponente...
                         </div>
-                        <button id="restart-btn" class="btn-primary" style="display: none; margin-top: 10px;">Jogar Novamente</button>
+                        
+                        <div class="action-buttons">
+                            <button id="restart-btn" class="btn-primary" style="display: none;">JOGAR NOVAMENTE</button>
+                            <button id="abandon-btn" class="btn-danger">ABANDONAR PARTIDA</button>
+                        </div>
                     </div>
                 </div>
             </section>
         </main>
 
         <footer>
-            <p>Desenvolvido para xadrez.giacomel.art</p>
+            <p>&copy; 2026 Developed for xadrez.giacomel.art</p>
         </footer>
     </div>
 
