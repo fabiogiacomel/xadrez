@@ -10,24 +10,7 @@ const Game = require('./src/models/Game');
 const Move = require('./src/models/Move');
 const { Chess } = require('chess.js');
 
-const getBoardSnapshot = (chess) => {
-    try {
-        const board = {};
-        const ranks = '87654321';
-        const files = 'abcdefgh';
-        const raw = chess.board();
-        for (let i = 0; i < 8; i++) {
-            for (let j = 0; j < 8; j++) {
-                const piece = raw[i][j];
-                if (piece) {
-                    const square = files[j] + ranks[i];
-                    board[square] = piece.color + piece.type.toUpperCase();
-                }
-            }
-        }
-        return board;
-    } catch (e) { return {}; }
-};
+const { getBoardSnapshot } = require('./src/utils/chessUtils');
 const apiRoutes = require('./src/routes/api');
 const gameHandler = require('./src/sockets/gameHandler');
 

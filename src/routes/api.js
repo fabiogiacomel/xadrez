@@ -3,6 +3,7 @@ const router = express.Router();
 const Game = require('../models/Game');
 const Move = require('../models/Move');
 const sequelize = require('../config/database');
+const { generateCode, getBoardSnapshot } = require('../utils/chessUtils');
 
 // Endpoint para listar todos os jogos (Exemplo Antigravity Bot)
 router.get('/games', async (req, res) => {
@@ -116,10 +117,7 @@ router.post('/games', async (req, res) => {
 
         const { settings = {} } = req.body;
         
-        // Gerador de código (reutilizando a lógica do handler se estivesse exportada, mas faremos aqui)
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-        for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+        const code = generateCode();
 
         const game = await Game.create({
             roomCode: code,
@@ -186,14 +184,7 @@ router.post('/games/:code/move', async (req, res) => {
 
         // Registrar no histórico (Súmula)
         const MoveModel = require('../models/Move');
-        const getBoardSnapshot = (c) => {
-            try {
-                const b = {};
-                const r = '87654321', f = 'abcdefgh', raw = c.board();
-                for(let i=0; i<8; i++) for(let j=0; j<8; j++) if(raw[i][j]) b[f[j]+r[i]] = raw[i][j].color + raw[i][j].type.toUpperCase();
-                return b;
-            } catch(e) { return {}; }
-        };
+
 
         await MoveModel.create({
             gameId: game.id,

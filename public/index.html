@@ -105,6 +105,16 @@
                     <input type="file" id="restore-session-input" accept=".json" hidden>
                 </div>
             </section>
+            
+            <!-- TELA SOBRE -->
+            <section id="about-screen" class="screen">
+                <div class="card">
+                    <h2 class="screen-title">Sobre o Projeto</h2>
+                    <p>Este é um projeto de Xadrez Premium desenvolvido para demonstrar capacidades avançadas de interface e sincronização em tempo real.</p>
+                    <p>Desenvolvido por Giacomel Art.</p>
+                    <button class="btn-secondary" onclick="showScreen('welcome-screen')">Voltar</button>
+                </div>
+            </section>
 
             <!-- TELA DO JOGO -->
             <section id="game-screen" class="screen">
@@ -180,7 +190,7 @@
     <!-- Scripts no final (melhor performance + Cache Busting) -->
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/1.0.0-beta.8/chess.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script src="js/app.js?v=20260402_0948" defer></script>
 </body>

@@ -129,20 +129,39 @@ function endGame(winner) {
 }
 
 /**
- * Lógica para movimentos no modo local
+ * Atualiza toda a interface após um movimento
  */
-function handleLocalMove(move) {
-    updateTimerDisplay();
+function updateGameUI(fen, move, timers, status, winner) {
+    if (fen) {
+        game.load(fen);
+        board.position(fen);
+    }
+    
+    if (timers) {
+        if (isLocalMode) localTimers = timers;
+        else remoteTimers = timers;
+    }
+    
+    removeHighlights();
+    if (move) {
+        $(`#board .square-${move.from}`).addClass('highlight-last-move');
+        $(`#board .square-${move.to}`).addClass('highlight-last-move');
+    }
+
     updateStatus();
+    updateTimerDisplay();
     updateCapturedPieces();
     
     const pgnLog = document.getElementById('pgn-log');
-    if (pgnLog && game) pgnLog.innerText = game.pgn();
+    if (pgnLog) pgnLog.innerText = game.pgn();
     
-    if (game && game.game_over()) {
-        let winner = 'Empate';
-        if (game.in_checkmate()) winner = (game.turn() === 'w' ? 'Pretas' : 'Brancas');
-        endGame(winner);
+    if (status === 'finished' || game.isGameOver()) {
+        let finalWinner = winner;
+        if (!finalWinner && game.isGameOver()) {
+            if (game.isCheckmate()) finalWinner = (game.turn() === 'w' ? 'Pretas' : 'Brancas');
+            else finalWinner = 'Empate';
+        }
+        endGame(finalWinner);
     }
 }
 
@@ -154,7 +173,7 @@ function removeHighlights() {
 
 function onDragStart(source, piece, position, orientation) {
     if (isGameOver || isWaitingForServer || isTimerPaused) return false;
-    if (game.game_over()) return false;
+    if (game.isGameOver()) return false;
 
     if (!isLocalMode) {
         if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
@@ -186,7 +205,7 @@ function onDrop(source, target) {
     $(`#board .square-${target}`).addClass('highlight-last-move');
 
     if (isLocalMode) {
-        handleLocalMove(move);
+        updateGameUI(null, moveObj, localTimers);
         if (myRoomCode) {
             socket.emit('make_move', { code: myRoomCode, move: moveObj });
         }
@@ -303,6 +322,10 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleMenu(false);
         startLocalGame();
     });
+    document.getElementById('menu-about')?.addEventListener('click', () => {
+        toggleMenu(false);
+        showScreen('about-screen');
+    });
 
     // Main Buttons
     document.getElementById('create-online-btn')?.addEventListener('click', () => {
@@ -330,6 +353,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('local-game-btn')?.addEventListener('click', () => startLocalGame());
+
+    // Restore Session Controls
+    const restoreBtn = document.getElementById('restore-session-btn');
+    const restoreInput = document.getElementById('restore-session-input');
+    
+    restoreBtn?.addEventListener('click', () => restoreInput?.click());
+    
+    restoreInput?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                if (data.fen) {
+                    isLocalMode = true;
+                    showScreen('game-screen');
+                    initBoard(data.fen);
+                    if (data.pgn) game.loadPgn(data.pgn);
+                    if (data.timers) localTimers = data.timers;
+                    updateStatus();
+                    updateCapturedPieces();
+                    updateTimerDisplay();
+                    startRoomClock();
+                    alert('Sessão restaurada com sucesso!');
+                }
+            } catch (err) {
+                alert('Erro ao carregar arquivo de sessão.');
+            }
+        };
+        reader.readAsText(file);
+    });
 
     // Copy handlers
     const handleCopy = (btn) => {
@@ -382,24 +438,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (statusText) statusText.innerText = message;
     });
 
+    socket.on('pause_updated', ({ paused }) => {
+        isTimerPaused = paused;
+        const pauseBtn = document.getElementById('pause-timer-btn');
+        if (pauseBtn) {
+            pauseBtn.innerText = isTimerPaused ? '▶ Retomar' : '⏸ Pausar';
+            pauseBtn.classList.toggle('paused', isTimerPaused);
+        }
+        updateStatus();
+    });
+
+    socket.on('timer_update', ({ timers }) => {
+        remoteTimers = timers;
+        updateTimerDisplay();
+    });
+
     socket.on('move_made', ({ fen, move, timers, status, winner }) => {
         isWaitingForServer = false;
-        if (game) game.load(fen);
-        if (board) board.position(fen);
-        if (timers) remoteTimers = timers;
-        
-        removeHighlights();
-        if (move) {
-            $(`#board .square-${move.from}`).addClass('highlight-last-move');
-            $(`#board .square-${move.to}`).addClass('highlight-last-move');
-        }
-        
-        updateStatus();
-        updateTimerDisplay();
-        updateCapturedPieces();
-        if (document.getElementById('pgn-log')) document.getElementById('pgn-log').innerText = game.pgn();
-        
-        if (status === 'finished') endGame(winner);
+        updateGameUI(fen, move, timers, status, winner);
     });
 
     // Timer Controls
@@ -427,6 +483,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (confirm('Abandonar partida?')) {
             if (!isLocalMode && myRoomCode) socket.emit('resign_game', myRoomCode);
             location.reload();
+        }
+    });
+
+    document.getElementById('restart-btn')?.addEventListener('click', () => {
+        location.reload();
+    });
+
+    document.getElementById('save-game-btn')?.addEventListener('click', () => {
+        const data = {
+            fen: game.fen(),
+            pgn: game.pgn(),
+            timers: isLocalMode ? localTimers : remoteTimers,
+            timestamp: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `xadrez_premium_${myRoomCode || 'local'}.json`;
+        a.click();
+    });
+
+    document.getElementById('download-summary-btn')?.addEventListener('click', async () => {
+        if (!isLocalMode && myRoomCode) {
+            window.open(`/api/games/${myRoomCode}/history`, '_blank');
+        } else {
+            const summary = `Xadrez Premium Giacomel\nData: ${new Date().toLocaleString()}\nPGN:\n${game.pgn()}`;
+            const blob = new Blob([summary], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sumula_xadrez.txt`;
+            a.click();
         }
     });
 
