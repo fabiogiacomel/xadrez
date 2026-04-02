@@ -149,6 +149,7 @@ io.on('connection', (socket) => {
 
     try {
       const result = room.chess.move(move);
+      
       if (result) {
         // Update timers
         if (!room.settings?.noClock) {
@@ -182,7 +183,10 @@ io.on('connection', (socket) => {
           status,
           winner
         });
-        console.log(`Move made in room ${code} by ${player.color}: ${typeof move === 'string' ? move : 'obj'}`);
+        console.log(`Move made in room ${code} by ${player.color}`);
+      } else {
+        // Se o result for null, o servidor rejeitou a jogada (Evita a falha silenciosa!)
+        socket.emit('error_message', 'Movimento rejeitado pelo servidor.');
       }
     } catch (e) {
       console.error(`Error in room ${code} move:`, e);

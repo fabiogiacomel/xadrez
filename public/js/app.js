@@ -327,6 +327,7 @@ function onDragStart(source, piece, position, orientation) {
 function onDrop(source, target) {
     removeHighlights();
     
+    // O chess.js local (0.10.3) precisa do promotion:'q' sempre para validar peões na última casa
     const move = game.move({
         from: source,
         to: target,
@@ -341,16 +342,13 @@ function onDrop(source, target) {
     if (isLocalMode) {
         handleLocalMove(move);
     } else {
-        // Desfaz o movimento local temporariamente para não dessincronizar.
-        // O tabuleiro será atualizado definitivamente quando o servidor emitir 'move_made'.
-        game.undo(); 
+        game.undo(); // Desfaz visualmente até o servidor confirmar
         
-        // Envia as coordenadas exatas. Isso resolve de forma definitiva 
-        // a incompatibilidade entre as versões do chess.js (0.x no client, 1.x no server).
-        socket.emit('make_move', { 
-            code: myRoomCode, 
-            move: { from: source, to: target, promotion: 'q' } 
-        });
+        // Criamos um objeto de jogada limpo para não irritar o chess.js rigoroso do servidor
+        const cleanMove = { from: move.from, to: move.to };
+        if (move.promotion) cleanMove.promotion = move.promotion; // Envia promoção só se realmente ocorrer
+
+        socket.emit('make_move', { code: myRoomCode, move: cleanMove });
     }
 }
 
@@ -440,7 +438,14 @@ socket.on('game_start', ({ code, fen, players, timers, settings }) => {
 socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
     if (isLocalMode) return;
     
-    game.load(fen);
+    // Ao invés de game.load() que zera o histórico, nós 'jogamos' o movimento para manter a súmula
+    if (move) {
+        const localMove = game.move(move.san);
+        if (!localMove) game.load(fen); // Fallback de segurança caso dê erro
+    } else {
+        game.load(fen);
+    }
+    
     board.position(fen);
     
     removeHighlights();
