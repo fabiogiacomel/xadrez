@@ -4,7 +4,10 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Chess } = require('chess.js');
 const path = require('path');
-const crypto = require('crypto');
+const cors = require('cors');
+const sequelize = require('./src/config/database');
+const Game = require('./src/models/Game');
+const apiRoutes = require('./src/routes/api');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,262 +18,299 @@ const io = new Server(server, {
   }
 });
 
+app.set('io', io);
+app.use(cors());
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/api/antigravity', apiRoutes);
 
-// Game State Management
-const rooms = new Map();
-let timerInterval = null;
+// Sincronizar Banco de Dados
+sequelize.sync().then(() => {
+    console.log('Banco de Dados MySQL Sincronizado.');
+}).catch(err => {
+    console.error('Erro ao sincronizar MySQL:', err);
+});
 
-function startGlobalTimer() {
-  if (timerInterval) return;
-  timerInterval = setInterval(() => {
-    rooms.forEach((room, code) => {
-      if (room.status === 'playing' && !room.settings?.noClock && !room.settings?.paused) {
-        const turn = room.chess.turn();
-        room.timers[turn]--;
-        if (room.timers[turn] <= 0) {
-          room.status = 'finished';
-          room.winner = turn === 'w' ? 'Black (Time)' : 'White (Time)';
-          io.to(code).emit('game_over_time', { winner: room.winner });
+// Loop Global de Monitoramento de Tempo (Lazy Evaluation)
+// Executa a cada 5 segundos para decretar vitórias por tempo "offline"
+setInterval(async () => {
+    const { Op } = require('sequelize');
+    try {
+        const now = new Date();
+        // Encontra partidas ativas onde o tempo do jogador da vez expirou
+        const activeGames = await Game.findAll({
+            where: {
+                status: 'playing',
+                paused: false,
+                noClock: false,
+                lastMoveTimestamp: { [Op.ne]: null }
+            }
+        });
+
+        for (const game of activeGames) {
+            const elapsed = Math.floor((now - new Date(game.lastMoveTimestamp)) / 1000);
+            const currentTimer = game.turn === 'w' ? game.timerWhite : game.timerBlack;
+
+            if (currentTimer - elapsed <= 0) {
+                const winnerColor = game.turn === 'w' ? 'Pretas' : 'Brancas';
+                await game.update({
+                    status: 'finished',
+                    winner: `${winnerColor} (Tempo)`,
+                    timerWhite: game.turn === 'w' ? 0 : game.timerWhite,
+                    timerBlack: game.turn === 'b' ? 0 : game.timerBlack
+                });
+                io.to(game.roomCode).emit('game_over_time', { winner: `${winnerColor} (Tempo)` });
+            }
         }
-        // Broadcast every 5 seconds to sync, or every second for smooth UI
-        io.to(code).emit('timer_update', { timers: room.timers });
-      }
-    });
-  }, 1000);
-}
-
-startGlobalTimer();
+    } catch (err) {
+        console.error('Erro no loop de tempo:', err);
+    }
+}, 5000);
 
 function generateCode() {
-  return crypto.randomBytes(3).toString('hex').toUpperCase();
+    return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+    console.log('User connected:', socket.id);
 
-  // User requests a new room code
-  socket.on('create_room', (settings = {}) => {
-    let code = generateCode();
-    while (rooms.has(code)) {
-      code = generateCode();
-    }
+    // Criar Sala (Online)
+    socket.on('create_room', async ({ settings = {}, sessionId }) => {
+        try {
+            const code = generateCode();
+            const game = await Game.create({
+                roomCode: code,
+                noClock: !!settings.noClock,
+                status: 'waiting',
+                whiteSessionId: sessionId // Armazena a sessão do criador (Brancas)
+            });
 
-    const roomData = {
-      id: code,
-      players: [{ id: socket.id, color: 'w' }],
-      chess: new Chess(),
-      timers: { w: 600, b: 600 }, // 10 minutes in seconds
-      lastMoveTime: null,
-      status: 'waiting', // waiting, playing, finished
-      winner: null,
-      settings: {
-        noClock: !!settings.noClock
-      }
-    };
-
-    rooms.set(code, roomData);
-    socket.join(code);
-    socket.emit('room_created', { code, color: 'w', settings: roomData.settings });
-    console.log(`Room ${code} created by ${socket.id} (noClock: ${roomData.settings.noClock})`);
-  });
-
-  socket.on('restore_game', (data) => {
-    if (!data || !data.fen) return;
-    
-    let code = generateCode();
-    while (rooms.has(code)) {
-      code = generateCode();
-    }
-
-    const roomData = {
-      id: code,
-      players: [{ id: socket.id, color: 'w' }], // Restorer is always White for now
-      chess: new Chess(data.fen),
-      timers: data.timers || { w: 600, b: 600 },
-      lastMoveTime: null,
-      status: 'waiting',
-      winner: null,
-      settings: data.settings || { noClock: false }
-    };
-
-    rooms.set(code, roomData);
-    socket.join(code);
-    socket.emit('room_created', { 
-      code, 
-      color: 'w', 
-      settings: roomData.settings, 
-      restored: true,
-      fen: data.fen,
-      timers: roomData.timers
-    });
-    console.log(`Room ${code} restored from JSON by ${socket.id}`);
-  });
-
-  // User joins an existing room
-  socket.on('join_room', (code) => {
-    const room = rooms.get(code);
-
-    if (!room) {
-      return socket.emit('error_message', 'Sala não encontrada.');
-    }
-
-    if (room.players.length >= 2) {
-      return socket.emit('error_message', 'Sala já está cheia.');
-    }
-
-    room.players.push({ id: socket.id, color: 'b' });
-    room.status = 'playing';
-    room.lastMoveTime = Date.now();
-    
-    socket.join(code);
-    
-    // Notify both players that the game started
-    io.to(code).emit('game_start', {
-      code: code, // Enviar o código para que o segundo jogador o salve
-      fen: room.chess.fen(),
-      players: room.players,
-      timers: room.timers,
-      settings: room.settings
-    });
-
-    console.log(`User ${socket.id} joined room ${code}`);
-  });
-
-  // Handle movements
-  socket.on('make_move', ({ code, move }) => {
-    const room = rooms.get(code);
-    if (!room || room.status !== 'playing') return;
-
-    const player = room.players.find(p => p.id === socket.id);
-    if (!player || player.color !== room.chess.turn()) {
-      return socket.emit('error_message', 'Não é o seu turno.');
-    }
-
-    try {
-      const result = room.chess.move(move);
-      
-      if (result) {
-        // Update timers
-        if (!room.settings?.noClock) {
-          const now = Date.now();
-          const elapsed = Math.floor((now - room.lastMoveTime) / 1000);
-          const pColor = player.color;
-          room.timers[pColor] = Math.max(0, room.timers[pColor] - elapsed);
-          room.lastMoveTime = now;
+            socket.join(code);
+            socket.emit('room_created', { 
+                code: game.roomCode, 
+                color: 'w', 
+                settings: { noClock: game.noClock } 
+            });
+            console.log(`Room ${game.roomCode} created with sessionId: ${sessionId}`);
+        } catch (err) {
+            socket.emit('error_message', 'Erro ao criar sala no banco.');
         }
+    });
 
-        // Check for game over
-        let status = 'playing';
-        let winner = null;
+    // Entrar em Sala / Reconectar (Online)
+    socket.on('join_room', async ({ code, sessionId }) => {
+        try {
+            const game = await Game.findOne({ where: { roomCode: code } });
 
-        if (room.chess.isCheckmate()) {
-          status = 'finished';
-          winner = player.color === 'w' ? 'Brancas' : 'Pretas';
-        } else if (room.chess.isDraw()) {
-          status = 'finished';
-          winner = 'Empate';
+            if (!game) {
+                return socket.emit('error_message', 'Sala não encontrada.');
+            }
+
+            // Lógica de Reconexão: Verifica se o sessionId já pertence a esta sala
+            if (sessionId === game.whiteSessionId || sessionId === game.blackSessionId) {
+                const color = (sessionId === game.whiteSessionId) ? 'w' : 'b';
+                socket.join(code);
+                return socket.emit('game_start', {
+                    code: game.roomCode,
+                    fen: game.fen,
+                    timers: { w: game.timerWhite, b: game.timerBlack },
+                    settings: { noClock: game.noClock, paused: game.paused },
+                    playerColor: color, // Informa ao cliente qual é a cor dele
+                    players: [
+                        { id: 'remoto', color: 'w' },
+                        { id: 'remoto', color: 'b' }
+                    ]
+                });
+            }
+
+            // Novo jogador tentando entrar
+            if (game.status === 'playing') {
+                return socket.emit('error_message', 'Esta partida já está cheia.');
+            }
+
+            if (game.status !== 'waiting') {
+                return socket.emit('error_message', 'Esta partida já foi encerrada.');
+            }
+
+            // Segundo jogador entra (Pretas)
+            await game.update({
+                status: 'playing',
+                blackSessionId: sessionId,
+                lastMoveTimestamp: new Date()
+            });
+
+            socket.join(code);
+            io.to(code).emit('game_start', {
+                code: game.roomCode,
+                fen: game.fen,
+                timers: { w: game.timerWhite, b: game.timerBlack },
+                settings: { noClock: game.noClock },
+                players: [
+                    { id: 'remoto_w', color: 'w' },
+                    { id: 'remoto_b', color: 'b' }
+                ]
+            });
+        } catch (err) {
+            console.error(err);
+            socket.emit('error_message', 'Erro ao processar entrada na sala.');
         }
-
-        room.status = status;
-        room.winner = winner;
-
-        io.to(code).emit('move_made', {
-          fen: room.chess.fen(),
-          move: result,
-          timers: room.timers,
-          turn: room.chess.turn(),
-          status,
-          winner
-        });
-        console.log(`Move made in room ${code} by ${player.color}`);
-      } else {
-        // Se o result for null, o servidor rejeitou a jogada (Evita a falha silenciosa!)
-        socket.emit('error_message', 'Movimento rejeitado pelo servidor.');
-      }
-    } catch (e) {
-      console.error(`Error in room ${code} move:`, e);
-      socket.emit('error_message', 'Movimento inválido.');
-    }
-  });
-
-  socket.on('resign_game', (code) => {
-    const room = rooms.get(code);
-    if (!room || room.status !== 'playing') return;
-
-    const player = room.players.find(p => p.id === socket.id);
-    if (!player) return;
-
-    room.status = 'finished';
-    room.winner = player.color === 'w' ? 'Black (Resignation)' : 'White (Resignation)';
-
-    io.to(code).emit('move_made', {
-      fen: room.chess.fen(),
-      move: null,
-      timers: room.timers,
-      turn: room.chess.turn(),
-      status: 'finished',
-      winner: room.winner
     });
-  });
 
-  socket.on('restart_game', (code) => {
-    const room = rooms.get(code);
-    if (!room || room.status !== 'finished') return;
+    // Fazer Jogada (Online)
+    socket.on('make_move', async ({ code, move }) => {
+        try {
+            const gameRecord = await Game.findOne({ where: { roomCode: code } });
+            if (!gameRecord || gameRecord.status !== 'playing') return;
 
-    // "Quem vence joga com as brancas"
-    // If Black won, swap roles. If White won, keep.
-    // If it was a draw, maybe keep roles or random.
-    if (room.winner && room.winner.includes('Black')) {
-       room.players.forEach(p => {
-         p.color = p.color === 'w' ? 'b' : 'w';
-       });
-    }
+            const chess = new Chess(gameRecord.fen);
+            if (chess.turn() !== gameRecord.turn) {
+                return socket.emit('error_message', 'Não é seu turno.');
+            }
 
-    room.chess.reset();
-    room.timers = { w: 600, b: 600 };
-    room.status = 'playing';
-    room.lastMoveTime = Date.now();
-    room.winner = null;
+            const result = chess.move(move);
+            if (result) {
+                const now = new Date();
+                let whiteTime = gameRecord.timerWhite;
+                let blackTime = gameRecord.timerBlack;
 
-    io.to(code).emit('game_restart', {
-      fen: room.chess.fen(),
-      players: room.players,
-      timers: room.timers,
-      settings: room.settings
+                if (!gameRecord.noClock && !gameRecord.paused && gameRecord.lastMoveTimestamp) {
+                    const elapsed = Math.floor((now - new Date(gameRecord.lastMoveTimestamp)) / 1000);
+                    if (gameRecord.turn === 'w') whiteTime = Math.max(0, whiteTime - elapsed);
+                    else blackTime = Math.max(0, blackTime - elapsed);
+                }
+
+                let status = 'playing';
+                let winner = null;
+
+                if (chess.isCheckmate()) {
+                    status = 'finished';
+                    winner = gameRecord.turn === 'w' ? 'Brancas' : 'Pretas';
+                } else if (chess.isDraw()) {
+                    status = 'finished';
+                    winner = 'Empate';
+                }
+
+                await gameRecord.update({
+                    fen: chess.fen(),
+                    pgn: chess.pgn(),
+                    turn: chess.turn(),
+                    status,
+                    winner,
+                    timerWhite: whiteTime,
+                    timerBlack: blackTime,
+                    lastMoveTimestamp: now
+                });
+
+                io.to(code).emit('move_made', {
+                    fen: chess.fen(),
+                    move: result,
+                    timers: { w: whiteTime, b: blackTime },
+                    turn: chess.turn(),
+                    status,
+                    winner
+                });
+            } else {
+                socket.emit('error_message', 'Movimento rejeitado.');
+            }
+        } catch (err) {
+            console.error(err);
+            socket.emit('error_message', 'Erro crítico ao processar jogada.');
+        }
     });
-  });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    // Cleanup simple room logic could be added here
-  });
+    socket.on('add_time', async (code) => {
+        try {
+            const game = await Game.findOne({ where: { roomCode: code } });
+            if (!game || game.status !== 'playing') return;
 
-  socket.on('add_time', (code) => {
-    const room = rooms.get(code);
-    if (!room || room.status !== 'playing') return;
-    
-    room.timers.w += 300;
-    room.timers.b += 300;
-    
-    io.to(code).emit('timer_update', { timers: room.timers });
-    console.log(`Room ${code}: Added 5m to both clocks.`);
-  });
+            await game.update({
+                timerWhite: game.timerWhite + 300,
+                timerBlack: game.timerBlack + 300
+            });
 
-  socket.on('toggle_pause', (code) => {
-    const room = rooms.get(code);
-    if (!room || room.status !== 'playing') return;
-    
-    room.settings.paused = !room.settings.paused;
-    
-    io.to(code).emit('pause_updated', { paused: room.settings.paused });
-    console.log(`Room ${code}: Timers ${room.settings.paused ? 'paused' : 'resumed'}.`);
-  });
+            io.to(code).emit('timer_update', { 
+                timers: { w: game.timerWhite + 300, b: game.timerBlack + 300 } 
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    socket.on('toggle_pause', async (code) => {
+        try {
+            const game = await Game.findOne({ where: { roomCode: code } });
+            if (!game || game.status !== 'playing') return;
+
+            const isPaused = !game.paused;
+            await game.update({
+                paused: isPaused,
+                // Se estiver despausando, recomeça o cronômetro do zero
+                lastMoveTimestamp: isPaused ? null : new Date()
+            });
+
+            io.to(code).emit('pause_updated', { paused: isPaused });
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    socket.on('resign_game', async (code) => {
+        try {
+            const game = await Game.findOne({ where: { roomCode: code } });
+            if (!game || game.status !== 'playing') return;
+
+            // Simple resignation logic: the one who resigned loses.
+            // As we don't have login, we don't strictly know who resigned here,
+            // but the front-end handles the button click.
+            await game.update({ status: 'finished', winner: 'Abandono' });
+            io.to(code).emit('move_made', { 
+                fen: game.fen, 
+                move: null, 
+                timers: { w: game.timerWhite, b: game.timerBlack }, 
+                status: 'finished', 
+                winner: 'Abandono' 
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    socket.on('restart_game', async (code) => {
+        try {
+            const game = await Game.findOne({ where: { roomCode: code } });
+            if (!game || game.status !== 'finished') return;
+
+            await game.update({
+                fen: 'start',
+                pgn: '',
+                turn: 'w',
+                status: 'playing',
+                timerWhite: 600,
+                timerBlack: 600,
+                lastMoveTimestamp: new Date(),
+                winner: null
+            });
+
+            io.to(code).emit('game_restart', {
+                fen: 'start',
+                timers: { w: 600, b: 600 },
+                settings: { noClock: game.noClock },
+                players: [
+                    { id: 'remoto', color: 'w' },
+                    { id: socket.id, color: 'b' }
+                ]
+            });
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
 });
 
 const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0';
-
-server.listen(PORT, HOST, () => {
-    console.log(`Server running on http://${HOST}:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor rodando em http://0.0.0.0:${PORT}`);
 });

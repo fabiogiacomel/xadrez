@@ -53,15 +53,37 @@ const menuHome = document.getElementById('menu-home');
 const menuLocal = document.getElementById('menu-local');
 const menuAbout = document.getElementById('menu-about');
 
+// 0. Session Management
+function getSessionId() {
+    let sid = localStorage.getItem('chess_session_id');
+    if (!sid) {
+        sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('chess_session_id', sid);
+    }
+    return sid;
+}
+
 // 1. Initial Room Creation (Online)
 function initSocket() {
-    socket.emit('create_room');
+    // Tenta reconectar automaticamente se houver um código na URL (opcional) ou apenas inicializa
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('room');
+    if (code) {
+        joinCodeInput.value = code;
+        socket.emit('join_room', { code, sessionId: getSessionId() });
+    } else {
+        socket.emit('create_room', { sessionId: getSessionId() });
+    }
 
     socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
         myRoomCode = code;
         if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
         if (!isLocalMode) playerColor = color;
         
+        // Atualiza a URL sem recarregar para facilitar o compartilhamento
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + code;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+
         if (restored) {
             isNoClockMode = settings?.noClock || false;
             isTimerPaused = settings?.paused || false;
@@ -71,9 +93,9 @@ function initSocket() {
             mgmtControls.style.display = 'grid';
             timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
             
-            statusText.innerText = 'Partida Restaurada! Aguardando oponente...';
+            statusText.innerText = 'Partida Restaurada!';
             initBoard(fen);
-            game.load(fen); // Load FEN into local chess instance
+            game.load(fen);
             if (!isNoClockMode) updateTimers(timers);
             updatePauseUI(isTimerPaused);
             updatePGN();
@@ -88,7 +110,7 @@ joinBtn.addEventListener('click', () => {
     if (code) {
         isLocalMode = false;
         flipToggleContainer.style.display = 'none';
-        socket.emit('join_room', code);
+        socket.emit('join_room', { code, sessionId: getSessionId() });
     }
 });
 
@@ -101,7 +123,7 @@ localGameBtn.addEventListener('click', () => {
 noClockBtn.addEventListener('click', () => {
     isNoClockMode = true;
     timersContainer.style.display = 'none';
-    socket.emit('create_room', { noClock: true });
+    socket.emit('create_room', { settings: { noClock: true }, sessionId: getSessionId() });
 });
 
 abandonBtn.addEventListener('click', () => {
@@ -410,7 +432,7 @@ function stopLocalTimer() {
 }
 
 // 7. Socket Events (Online Mode)
-socket.on('game_start', ({ code, fen, players, timers, settings }) => {
+socket.on('game_start', ({ code, fen, players, timers, settings, playerColor: serverColor }) => {
     isLocalMode = false;
     myRoomCode = code; // Salvar o código da sala para que as Pretas também possam enviar jogadas
     isNoClockMode = settings?.noClock || false;
@@ -425,8 +447,14 @@ socket.on('game_start', ({ code, fen, players, timers, settings }) => {
     gameScreen.classList.add('active');
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
     
-    const me = players.find(p => p.id === socket.id);
-    playerColor = me.color;
+    // Se o servidor enviou a cor explicitamente (Reconexão), usa ela. 
+    // Caso contrário, tenta achar pelo ID do socket (Legacy/Primeira entrada).
+    if (serverColor) {
+        playerColor = serverColor;
+    } else if (players) {
+        const me = players.find(p => p.id === socket.id);
+        if (me) playerColor = me.color;
+    }
 
     initBoard(fen);
     game.load(fen);
