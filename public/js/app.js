@@ -78,26 +78,24 @@ function initSocket() {
         myRoomCode = code;
         if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
         if (roomCodeContainer) roomCodeContainer.style.display = 'flex';
-        if (!isLocalMode) playerColor = color;
+        if (!isLocalMode) playerColor = color || 'w';
         
         // Atualiza a URL sem recarregar para facilitar o compartilhamento
         const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + code;
         window.history.pushState({ path: newUrl }, '', newUrl);
 
+        // Transição imediata para a tela de jogo para o Criador (feeling premium)
+        welcomeScreen.classList.remove('active');
+        gameScreen.classList.add('active');
+        mgmtControls.style.display = 'grid';
+        timersContainer.style.display = (settings?.noClock) ? 'none' : 'grid';
+        
+        statusText.innerText = restored ? 'Partida Restaurada!' : 'Aguardando Oponente...';
+        initBoard(fen || 'start');
+        game.load(fen || 'start');
+        if (!isNoClockMode && timers) updateTimers(timers);
         if (restored) {
-            isNoClockMode = settings?.noClock || false;
-            isTimerPaused = settings?.paused || false;
-            
-            welcomeScreen.classList.remove('active');
-            gameScreen.classList.add('active');
-            mgmtControls.style.display = 'grid';
-            timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
-            
-            statusText.innerText = 'Partida Restaurada!';
-            initBoard(fen);
-            game.load(fen);
-            if (!isNoClockMode) updateTimers(timers);
-            updatePauseUI(isTimerPaused);
+            updatePauseUI(settings?.paused || false);
             updatePGN();
             updateCapturedPieces();
         }

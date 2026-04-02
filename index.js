@@ -154,12 +154,13 @@ io.on('connection', (socket) => {
                 ]
             });
 
-            // 2. Avisa o PRIMEIRO JOGADOR (Brancas) que a partida começou (sem mudar a cor dele)
+            // 2. Avisa o PRIMEIRO JOGADOR (Brancas) que a partida começou
             socket.to(code).emit('game_start', {
                 code: game.roomCode,
                 fen: game.fen,
                 timers: { w: game.timerWhite, b: game.timerBlack },
                 settings: { noClock: game.noClock },
+                playerColor: 'w', // Garante que o criador saiba que continua como Brancas
                 players: [
                     { id: 'remoto_w', color: 'w' },
                     { id: 'remoto_b', color: 'b' }
