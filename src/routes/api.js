@@ -33,6 +33,18 @@ router.post('/games', authenticateBot, async (req, res) => {
     }
 });
 
+// NOVO: Endpoint para Sincronização de Tabelas (Útil se o acesso remoto MySQL estiver bloqueado)
+router.get('/setup-db', authenticateBot, async (req, res) => {
+    try {
+        const sequelize = require('../config/database');
+        await sequelize.sync({ alter: true });
+        res.json({ success: true, message: 'Banco de dados sincronizado com sucesso diretamente pelo servidor!' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Erro ao sincronizar banco pelo servidor.', details: error.message });
+    }
+});
+
 // 2. Consultar estado da partida
 router.get('/games/:code', authenticateBot, async (req, res) => {
     try {
