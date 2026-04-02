@@ -76,6 +76,9 @@ function generateCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// Mapeamento de socket.id para código de sala para facilitar desconexão
+const socketToRoom = new Map();
+
 io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
@@ -87,10 +90,12 @@ io.on('connection', (socket) => {
                 roomCode: code,
                 noClock: !!settings.noClock,
                 status: 'waiting',
-                whiteSessionId: sessionId // Armazena a sessão do criador (Brancas)
+                whiteSessionId: sessionId
             });
 
             socket.join(code);
+            socketToRoom.set(socket.id, code);
+            
             socket.emit('room_created', { 
                 code: game.roomCode, 
                 color: 'w', 
@@ -111,69 +116,61 @@ io.on('connection', (socket) => {
                 return socket.emit('error_message', 'Sala não encontrada.');
             }
 
-            // Lógica de Reconexão: Verifica se o sessionId já pertence a esta sala
+            socket.join(code);
+            socketToRoom.set(socket.id, code);
+
+            // Se for reconexão de um jogador existente
             if (sessionId === game.whiteSessionId || sessionId === game.blackSessionId) {
                 const color = (sessionId === game.whiteSessionId) ? 'w' : 'b';
-                socket.join(code);
+                
+                // Se estava pausado por desconexão, retoma
+                if (game.paused && game.status === 'playing') {
+                    await game.update({ paused: false, lastMoveTimestamp: new Date() });
+                    io.to(code).emit('pause_updated', { paused: false });
+                }
+
                 return socket.emit('game_start', {
                     code: game.roomCode,
                     fen: game.fen,
                     timers: { w: game.timerWhite, b: game.timerBlack },
-                    settings: { noClock: game.noClock, paused: game.paused },
-                    playerColor: color, // Reconexão: Informa ao cliente qual é a cor dele
-                    players: [
-                        { id: 'remoto_w', color: 'w' },
-                        { id: 'remoto_b', color: 'b' }
-                    ]
+                    settings: { noClock: game.noClock, paused: false },
+                    playerColor: color,
+                    players: [{ color: 'w' }, { color: 'b' }]
                 });
             }
 
-            // Novo jogador tentando entrar
-            if (game.status === 'playing') {
-                return socket.emit('error_message', 'Esta partida já está cheia.');
-            }
+            // Novo jogador (Pretas)
+            if (game.status === 'playing') return socket.emit('error_message', 'Partida cheia.');
+            if (game.status !== 'waiting') return socket.emit('error_message', 'Partida encerrada.');
 
-            if (game.status !== 'waiting') {
-                return socket.emit('error_message', 'Esta partida já foi encerrada.');
-            }
-
-            // Segundo jogador entra (Pretas)
             await game.update({
                 status: 'playing',
                 blackSessionId: sessionId,
-                lastMoveTimestamp: new Date()
+                lastMoveTimestamp: new Date(),
+                paused: false
             });
 
-            socket.join(code);
-            
-            // 1. Avisa o SEGUNDO JOGADOR que ele entrou como PRETAS
+            // Avisa o novo jogador (Pretas)
             socket.emit('game_start', {
                 code: game.roomCode,
                 fen: game.fen,
                 timers: { w: game.timerWhite, b: game.timerBlack },
                 settings: { noClock: game.noClock },
-                playerColor: 'b',
-                players: [
-                    { id: 'remoto_w', color: 'w' },
-                    { id: 'remoto_b', color: 'b' }
-                ]
+                playerColor: 'b'
             });
 
-            // 2. Avisa o PRIMEIRO JOGADOR (Brancas) que a partida começou
+            // Avisa o criador (Brancas)
             socket.to(code).emit('game_start', {
                 code: game.roomCode,
                 fen: game.fen,
                 timers: { w: game.timerWhite, b: game.timerBlack },
                 settings: { noClock: game.noClock },
-                playerColor: 'w', // Garante que o criador saiba que continua como Brancas
-                players: [
-                    { id: 'remoto_w', color: 'w' },
-                    { id: 'remoto_b', color: 'b' }
-                ]
+                playerColor: 'w'
             });
+
         } catch (err) {
             console.error(err);
-            socket.emit('error_message', 'Erro ao processar entrada na sala.');
+            socket.emit('error_message', 'Erro ao processar entrada.');
         }
     });
 
@@ -181,7 +178,9 @@ io.on('connection', (socket) => {
     socket.on('make_move', async ({ code, move }) => {
         try {
             const gameRecord = await Game.findOne({ where: { roomCode: code } });
-            if (!gameRecord || gameRecord.status !== 'playing') return;
+            if (!gameRecord || gameRecord.status !== 'playing' || gameRecord.paused) {
+                return socket.emit('error_message', 'Partida pausada ou indisponível.');
+            }
 
             const chess = new Chess(gameRecord.fen);
             if (chess.turn() !== gameRecord.turn) {
@@ -194,7 +193,7 @@ io.on('connection', (socket) => {
                 let whiteTime = gameRecord.timerWhite;
                 let blackTime = gameRecord.timerBlack;
 
-                if (!gameRecord.noClock && !gameRecord.paused && gameRecord.lastMoveTimestamp) {
+                if (!gameRecord.noClock && gameRecord.lastMoveTimestamp) {
                     const elapsed = Math.floor((now - new Date(gameRecord.lastMoveTimestamp)) / 1000);
                     if (gameRecord.turn === 'w') whiteTime = Math.max(0, whiteTime - elapsed);
                     else blackTime = Math.max(0, blackTime - elapsed);
@@ -202,13 +201,10 @@ io.on('connection', (socket) => {
 
                 let status = 'playing';
                 let winner = null;
-
-                if (chess.isCheckmate()) {
+                if (chess.game_over()) {
                     status = 'finished';
-                    winner = gameRecord.turn === 'w' ? 'Brancas' : 'Pretas';
-                } else if (chess.isDraw()) {
-                    status = 'finished';
-                    winner = 'Empate';
+                    if (chess.in_checkmate()) winner = chess.turn() === 'w' ? 'Pretas' : 'Brancas';
+                    else if (chess.in_draw()) winner = 'Empate';
                 }
 
                 await gameRecord.update({
@@ -231,69 +227,43 @@ io.on('connection', (socket) => {
                     winner
                 });
             } else {
-                socket.emit('error_message', 'Movimento rejeitado.');
+                socket.emit('error_message', 'Movimento inválido.');
             }
         } catch (err) {
             console.error(err);
-            socket.emit('error_message', 'Erro crítico ao processar jogada.');
+            socket.emit('error_message', 'Erro crítico na jogada.');
         }
     });
 
     socket.on('add_time', async (code) => {
         try {
             const game = await Game.findOne({ where: { roomCode: code } });
-            if (!game || game.status !== 'playing') return;
-
-            await game.update({
-                timerWhite: game.timerWhite + 300,
-                timerBlack: game.timerBlack + 300
-            });
-
-            io.to(code).emit('timer_update', { 
-                timers: { w: game.timerWhite + 300, b: game.timerBlack + 300 } 
-            });
-        } catch (err) {
-            console.error(err);
-        }
+            if (!game) return;
+            const newW = game.timerWhite + 300;
+            const newB = game.timerBlack + 300;
+            await game.update({ timerWhite: newW, timerBlack: newB });
+            io.to(code).emit('timer_update', { timers: { w: newW, b: newB } });
+        } catch (e) {}
     });
 
     socket.on('toggle_pause', async (code) => {
         try {
             const game = await Game.findOne({ where: { roomCode: code } });
-            if (!game || game.status !== 'playing') return;
-
-            const isPaused = !game.paused;
-            await game.update({
-                paused: isPaused,
-                // Se estiver despausando, recomeça o cronômetro do zero
-                lastMoveTimestamp: isPaused ? null : new Date()
-            });
-
-            io.to(code).emit('pause_updated', { paused: isPaused });
-        } catch (err) {
-            console.error(err);
-        }
+            if (!game) return;
+            const newState = !game.paused;
+            await game.update({ paused: newState, lastMoveTimestamp: newState ? null : new Date() });
+            io.to(code).emit('pause_updated', { paused: newState });
+        } catch (e) {}
     });
 
     socket.on('resign_game', async (code) => {
         try {
             const game = await Game.findOne({ where: { roomCode: code } });
-            if (!game || game.status !== 'playing') return;
-
-            // Simple resignation logic: the one who resigned loses.
-            // As we don't have login, we don't strictly know who resigned here,
-            // but the front-end handles the button click.
-            await game.update({ status: 'finished', winner: 'Abandono' });
-            io.to(code).emit('move_made', { 
-                fen: game.fen, 
-                move: null, 
-                timers: { w: game.timerWhite, b: game.timerBlack }, 
-                status: 'finished', 
-                winner: 'Abandono' 
-            });
-        } catch (err) {
-            console.error(err);
-        }
+            if (game) {
+                await game.update({ status: 'finished', winner: 'Desistência' });
+                io.to(code).emit('move_made', { status: 'finished', winner: 'Desistência', fen: game.fen });
+            }
+        } catch (e) {}
     });
 
     socket.on('restart_game', async (code) => {
@@ -302,32 +272,39 @@ io.on('connection', (socket) => {
             if (!game || game.status !== 'finished') return;
 
             await game.update({
-                fen: 'start',
+                fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
                 pgn: '',
                 turn: 'w',
                 status: 'playing',
                 timerWhite: 600,
                 timerBlack: 600,
                 lastMoveTimestamp: new Date(),
+                paused: false,
                 winner: null
             });
 
             io.to(code).emit('game_restart', {
                 fen: 'start',
                 timers: { w: 600, b: 600 },
-                settings: { noClock: game.noClock },
-                players: [
-                    { id: 'remoto', color: 'w' },
-                    { id: socket.id, color: 'b' }
-                ]
+                settings: { noClock: game.noClock }
             });
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (e) {}
     });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
+    socket.on('disconnect', async () => {
+        const roomCode = socketToRoom.get(socket.id);
+        if (roomCode) {
+            console.log(`Player disconnected from room ${roomCode}`);
+            const game = await Game.findOne({ where: { roomCode } });
+            if (game && game.status === 'playing') {
+                await game.update({ paused: true });
+                io.to(roomCode).emit('player_disconnected', { 
+                    message: 'Oponente desconectado. O relógio foi pausado até que ele retorne.' 
+                });
+                io.to(roomCode).emit('pause_updated', { paused: true });
+            }
+            socketToRoom.delete(socket.id);
+        }
     });
 });
 
@@ -335,3 +312,4 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Servidor rodando em http://0.0.0.0:${PORT}`);
 });
+

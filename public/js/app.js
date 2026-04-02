@@ -22,7 +22,9 @@ let isNoClockMode = false;
 let isTimerPaused = false;
 let isWaitingForServer = false; // Bloqueia movimentos múltiplos online
 let localTimers = { w: 600, b: 600 };
+let remoteTimers = { w: 600, b: 600 };
 let localInterval = null;
+let roomInterval = null;
 
 // Global UI Helper
 function showScreen(screenId) {
@@ -47,7 +49,8 @@ function removeHighlights() {
 }
 
 function onDragStart(source, piece, position, orientation) {
-    if (isGameOver || isWaitingForServer) return false;
+    if (isGameOver || isWaitingForServer || isTimerPaused) return false;
+
     if (game.game_over()) return false;
 
     // Apenas permitir arrastar peças da própria cor
@@ -183,21 +186,57 @@ document.addEventListener('DOMContentLoaded', () => {
         if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'block';
         if (roomCodeContainer) roomCodeContainer.style.display = 'flex';
 
-        showScreen('game-screen');
-        statusText.innerText = restored ? 'Partida Restaurada!' : 'Aguardando Oponente...';
-        initBoard(fen);
+        if (restored) {
+            showScreen('game-screen');
+            statusText.innerText = 'Partida Restaurada!';
+            initBoard(fen);
+        } else {
+            // Permanece na tela inicial mostrando o código e uma mensagem
+            if (statusText) statusText.innerText = 'Aguardando Oponente...';
+            const createBtn = document.getElementById('create-online-btn');
+            if (createBtn) {
+                createBtn.innerText = 'AGUARDANDO OPONENTE...';
+                createBtn.disabled = true;
+                createBtn.style.opacity = '0.7';
+            }
+        }
     });
 
-    socket.on('game_start', ({ code, fen, playerColor: serverColor, settings }) => {
+    socket.on('game_start', ({ code, fen, playerColor: serverColor, settings, timers }) => {
         myRoomCode = code;
         if (serverColor) playerColor = serverColor;
         isLocalMode = false;
         isWaitingForServer = false;
         
+        if (timers) remoteTimers = timers;
+        if (settings && settings.paused) isTimerPaused = true;
+
         if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'none';
         showScreen('game-screen');
-        statusText.innerText = 'Partida Iniciada! Sua vez.';
+        updateStatus();
         initBoard(fen);
+        startRoomClock();
+    });
+
+    socket.on('player_disconnected', ({ message }) => {
+        statusText.innerText = message;
+        statusText.style.background = 'rgba(239, 68, 68, 0.2)';
+        statusText.style.borderColor = '#ef4444';
+    });
+
+    socket.on('pause_updated', ({ paused }) => {
+        isTimerPaused = paused;
+        const pauseBtn = document.getElementById('pause-timer-btn');
+        if (pauseBtn) {
+            pauseBtn.innerText = paused ? 'Retomar Relógio' : 'Pausar Relógio';
+            pauseBtn.classList.toggle('paused', paused);
+        }
+        updateStatus();
+    });
+
+    socket.on('timer_update', ({ timers }) => {
+        remoteTimers = timers;
+        updateTimerDisplay();
     });
 
     socket.on('move_made', ({ fen, move, turn, status, winner }) => {
@@ -209,8 +248,11 @@ document.addEventListener('DOMContentLoaded', () => {
             $(`#board .square-${move.from}`).addClass('highlight-last-move');
             $(`#board .square-${move.to}`).addClass('highlight-last-move');
         }
+        if (timers) remoteTimers = timers;
         updateTurnIndicator(turn);
+        updateTimerDisplay();
         if (status === 'finished') endGame(winner);
+        else updateStatus();
     });
 
     socket.on('error_message', (msg) => {
@@ -224,26 +266,159 @@ document.addEventListener('DOMContentLoaded', () => {
     const code = urlParams.get('room');
     if (code) socket.emit('join_room', { code, sessionId: getSessionId() });
 
+    // Súmula Download
+    const downloadBtn = document.getElementById('download-summary-btn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+            const summary = {
+                roomCode: myRoomCode,
+                date: new Date().toLocaleString(),
+                pgn: game.pgn(),
+                result: isGameOver ? document.getElementById('status-text').innerText : 'Em andamento',
+                timers: isLocalMode ? localTimers : remoteTimers,
+                mode: isLocalMode ? 'Local' : 'Online'
+            };
+            const blob = new Blob([JSON.stringify(summary, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sumula_xadrez_${myRoomCode || 'local'}.json`;
+            a.click();
+        });
+    }
+
+    // Timer Pause Button
+    const pauseBtn = document.getElementById('pause-timer-btn');
+    if (pauseBtn) {
+        pauseBtn.addEventListener('click', () => {
+            if (isLocalMode) {
+                isTimerPaused = !isTimerPaused;
+                pauseBtn.innerText = isTimerPaused ? 'Retomar Relógio' : 'Pausar Relógio';
+                pauseBtn.classList.toggle('paused', isTimerPaused);
+                updateStatus();
+            } else {
+                socket.emit('toggle_pause', myRoomCode);
+            }
+        });
+    }
+
+    // Add 5 min button
+    const addTimeBtn = document.getElementById('add-5m-btn');
+    if (addTimeBtn) {
+        addTimeBtn.addEventListener('click', () => {
+            if (isLocalMode) {
+                localTimers.w += 300;
+                localTimers.b += 300;
+                updateTimerDisplay();
+            } else {
+                socket.emit('add_time', myRoomCode);
+            }
+        });
+    }
+
+    // Abandon/Leave
+    if (abandonBtn) {
+        abandonBtn.addEventListener('click', () => {
+            if (confirm('Deseja realmente abandonar a partida?')) {
+                if (!isLocalMode && myRoomCode) {
+                    socket.emit('resign_game', myRoomCode);
+                }
+                location.reload();
+            }
+        });
+    }
+
+    socket.on('disconnect', () => {
+        const sText = document.getElementById('status-text');
+        if (sText) {
+            sText.innerText = 'Conexão perdida. Tentando reconectar...';
+            sText.style.background = 'rgba(239, 68, 68, 0.2)';
+        }
+    });
+
+    socket.on('connect', () => {
+        const sText = document.getElementById('status-text');
+        if (sText && myRoomCode) {
+            sText.style.background = '';
+            sText.style.borderColor = '';
+            socket.emit('join_room', { code: myRoomCode, sessionId: getSessionId() });
+        }
+    });
+
     console.log('Xadrez Giacomel Art Pronto!');
 });
 
-// Outras funções auxiliares (Local Mode, Timers, etc) mantidas do código anterior...
+function startRoomClock() {
+    if (roomInterval) clearInterval(roomInterval);
+    roomInterval = setInterval(() => {
+        if (isGameOver || isTimerPaused || isNoClockMode) return;
+        
+        const turn = game.turn();
+        if (isLocalMode) {
+            localTimers[turn]--;
+            if (localTimers[turn] <= 0) endGame(turn === 'w' ? 'Pretas (Tempo)' : 'Brancas (Tempo)');
+        } else {
+            remoteTimers[turn]--;
+        }
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const timers = isLocalMode ? localTimers : remoteTimers;
+    const format = (s) => {
+        if (s < 0) s = 0;
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m}:${sec.toString().padStart(2, '0')}`;
+    };
+    const tw = document.querySelector('#timer-white .time');
+    const tb = document.querySelector('#timer-black .time');
+    if (tw) tw.innerText = format(timers.w);
+    if (tb) tb.innerText = format(timers.b);
+
+    document.querySelectorAll('.timer').forEach(t => t.classList.remove('active'));
+    const activeTimer = document.querySelector(`#timer-${game.turn() === 'w' ? 'white' : 'black'}`);
+    if (activeTimer) activeTimer.classList.add('active');
+}
+
+function updateStatus() {
+    const statusText = document.getElementById('status-text');
+    if (!statusText) return;
+    
+    if (isGameOver) return;
+    if (isTimerPaused) {
+        statusText.innerText = 'Partida Pausada';
+        return;
+    }
+
+    const isMyTurn = isLocalMode || (game.turn() === playerColor);
+    statusText.innerText = isMyTurn ? 'Sua Vez' : 'Aguardando Oponente...';
+    statusText.style.background = '';
+    statusText.style.borderColor = '';
+}
+
 function startLocalGame() {
     isLocalMode = true;
     showScreen('game-screen');
+    localTimers = { w: 600, b: 600 };
     initBoard();
-    updateTurnIndicator('w');
+    startRoomClock();
+    updateStatus();
+    const pauseBtn = document.getElementById('pause-timer-btn');
+    if (pauseBtn) {
+        pauseBtn.innerText = 'Pausar Relógio';
+        pauseBtn.classList.remove('paused');
+    }
 }
 
 function updateTurnIndicator(turn) {
-    const statusText = document.getElementById('status-text');
-    if (!statusText) return;
-    const isMyTurn = isLocalMode || (turn === playerColor);
-    statusText.innerText = isMyTurn ? 'Sua Vez' : 'Aguardando Oponente...';
+    updateStatus();
 }
 
 function endGame(winner) {
     isGameOver = true;
+    if (roomInterval) clearInterval(roomInterval);
     const statusText = document.getElementById('status-text');
     if (statusText) statusText.innerText = `Fim de Jogo! Vencedor: ${winner}`;
     const restartBtn = document.getElementById('restart-btn');
@@ -251,5 +426,6 @@ function endGame(winner) {
 }
 
 function resetToMenu() {
-    window.location.search = ''; // Recarrega para limpar estado
+    window.location.search = ''; 
 }
+
