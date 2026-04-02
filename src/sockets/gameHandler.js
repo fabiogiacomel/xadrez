@@ -171,7 +171,12 @@ module.exports = (io) => {
                     return socket.emit('error_message', 'Partida indisponível ou pausada.');
                 }
 
-                const chess = new Chess(game.fen);
+                const chess = new Chess();
+                if (game.pgn) {
+                    chess.loadPgn(game.pgn);
+                } else if (game.fen) {
+                    chess.load(game.fen);
+                }
                 const result = chess.move(move);
 
                 if (!result) return socket.emit('error_message', 'Movimento inválido.');
