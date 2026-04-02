@@ -3,6 +3,12 @@
  * Frontend Logic
  */
 
+// --- PERSISTÊNCIA DE SESSÃO ---
+if (!localStorage.getItem('chess_session_id')) {
+    localStorage.setItem('chess_session_id', 'sess_' + Math.random().toString(36).substring(2));
+}
+const mySessionId = localStorage.getItem('chess_session_id');
+
 const socket = io({
     transports: ['websocket', 'polling'],
     reconnection: true,
@@ -301,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Main Buttons
     document.getElementById('create-online-btn')?.addEventListener('click', () => {
         isLocalMode = false;
-        socket.emit('create_room', { sessionId: localStorage.getItem('chess_session_id') || Math.random().toString(36).substring(2) });
+        socket.emit('create_room', { sessionId: mySessionId });
         document.getElementById('create-online-btn').innerText = 'CRIANDO...';
     });
 
@@ -309,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
         if (code) {
             isLocalMode = false;
-            socket.emit('join_room', { code, sessionId: localStorage.getItem('chess_session_id') || Math.random().toString(36).substring(2) });
+            socket.emit('join_room', { code, sessionId: mySessionId });
         }
     });
 
@@ -349,6 +355,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus();
         updateCapturedPieces();
         startRoomClock();
+    });
+
+    socket.on('error_message', (msg) => { 
+        alert("Erro: " + msg); 
+        const createBtn = document.getElementById('create-online-btn');
+        if (createBtn) createBtn.innerText = 'CRIAR PARTIDA ONLINE';
+    });
+
+    socket.on('game_over_time', ({ winner }) => endGame(winner));
+    socket.on('game_over', ({ winner }) => endGame(winner));
+    socket.on('player_disconnected', ({ message }) => {
+        const statusText = document.getElementById('status-text');
+        if (statusText) statusText.innerText = message;
     });
 
     socket.on('move_made', ({ fen, move, timers, status, winner }) => {
