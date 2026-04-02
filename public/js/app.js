@@ -327,12 +327,15 @@ function onDragStart(source, piece, position, orientation) {
 function onDrop(source, target) {
     removeHighlights();
     
-    // O chess.js local (0.10.3) precisa do promotion:'q' sempre para validar peões na última casa
-    const move = game.move({
-        from: source,
-        to: target,
-        promotion: 'q'
-    });
+    let moveObj = { from: source, to: target };
+    
+    // Identifica se é um peão chegando na última fileira para adicionar a promoção
+    const piece = game.get(source);
+    if (piece && piece.type === 'p' && (target[1] === '8' || target[1] === '1')) {
+        moveObj.promotion = 'q';
+    }
+
+    const move = game.move(moveObj);
 
     if (move === null) return 'snapback';
 
@@ -342,13 +345,9 @@ function onDrop(source, target) {
     if (isLocalMode) {
         handleLocalMove(move);
     } else {
-        game.undo(); // Desfaz visualmente até o servidor confirmar
-        
-        // Criamos um objeto de jogada limpo para não irritar o chess.js rigoroso do servidor
-        const cleanMove = { from: move.from, to: move.to };
-        if (move.promotion) cleanMove.promotion = move.promotion; // Envia promoção só se realmente ocorrer
-
-        socket.emit('make_move', { code: myRoomCode, move: cleanMove });
+        // Modo Online: Desfaz a jogada local imediatamente e aguarda o servidor
+        game.undo(); 
+        socket.emit('make_move', { code: myRoomCode, move: moveObj });
     }
 }
 
@@ -437,26 +436,28 @@ socket.on('game_start', ({ code, fen, players, timers, settings }) => {
 
 socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
     if (isLocalMode) return;
-
+    
     if (move) {
-        // Usa as coordenadas exatas enviadas pelo servidor no lugar do SAN.
-        // Isso impede falhas de tradução e mantém a Súmula intacta!
-        const localMove = game.move({
-            from: move.from,
-            to: move.to,
-            promotion: move.promotion || 'q'
-        });
+        let moveObj = { from: move.from, to: move.to };
         
-        // Se ainda assim der algum erro muito crítico, usa o FEN como emergência
+        // Aplica a promoção apenas se o servidor confirmar que houve uma
+        if (move.promotion) {
+            moveObj.promotion = move.promotion;
+        }
+        
+        // Aplica a jogada localmente para preservar o histórico (Súmula)
+        const localMove = game.move(moveObj);
+        
         if (!localMove) {
-            console.warn("Falha de sincronização da Súmula. Forçando recarregamento da posição.");
+            // Apenas em caso de erro extremo
             game.load(fen);
         }
     } else {
         game.load(fen);
     }
-
-    board.position(fen);
+    
+    // Atualiza a interface gráfica
+    board.position(game.fen());
 
     removeHighlights();
     if (move) {
