@@ -276,6 +276,23 @@ router.post('/db/sync', async (req, res) => {
     }
 });
 
+// Endpoint para ZERAR (reseta tudo) o banco de dados
+router.post('/db/reset', async (req, res) => {
+    try {
+        const apiKey = req.headers['authorization']?.split(' ')[1];
+        if (apiKey !== process.env.ANTIGRAVITY_API_KEY) {
+            return res.status(403).json({ error: 'Chave API inválida.' });
+        }
+
+        // force: true APAGA todas as tabelas e cria do zero
+        await sequelize.sync({ force: true });
+        res.json({ message: 'Banco de dados REINICIADO (todos os dados foram apagados).' });
+    } catch (err) {
+        console.error('Erro ao resetar banco:', err);
+        res.status(500).json({ error: 'Erro ao resetar banco de dados.' });
+    }
+});
+
 // Endpoint para verificar o estado/saúde do banco de dados
 router.get('/db/status', async (req, res) => {
     try {
