@@ -7,9 +7,11 @@ const sequelize = new Sequelize(
     process.env.DB_PASS, 
     {
         host: process.env.DB_HOST || '127.0.0.1',
+        port: process.env.DB_PORT || 3306,
         dialect: 'mysql',
-        dialectOptions: process.env.DB_HOST?.includes('.') ? {} : {
-            socketPath: '/tmp/mysql.sock' 
+        dialectOptions: {
+            // Se precisar de socket, use uma variável específica
+            socketPath: process.env.DB_SOCKET || undefined
         },
         logging: false
     }

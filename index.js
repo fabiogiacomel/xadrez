@@ -51,16 +51,23 @@ app.use('/api', apiRoutes);
 app.set('io', io);
 
 // ====================== BANCO DE DADOS ======================
-sequelize.sync({ alter: process.env.NODE_ENV === 'development' })
-    .then(() => console.log('✅ Banco de Dados sincronizado.'))
-    .catch(err => console.error('❌ Erro ao sincronizar BD:', err));
+sequelize.authenticate()
+    .then(() => {
+        console.log('🔗 Conexão com o banco de dados estabelecida com sucesso.');
+        return sequelize.sync({ alter: process.env.NODE_ENV === 'development' });
+    })
+    .then(() => console.log('✅ Tabelas sincronizadas com sucesso.'))
+    .catch(err => {
+        console.error('❌ ERRO CRÍTICO AO CONECTAR/SINCRONIZAR BANCO DE DADOS:');
+        console.error(err.message);
+        console.error('⚠️ O servidor continuará rodando, mas operações de banco podem falhar.');
+    });
 
 // ====================== MONITORAMENTO DE TEMPO ======================
+const { Op } = require('sequelize');
 setInterval(async () => {
     try {
-        const { Op } = require('sequelize');
         const now = new Date();
-
         const activeGames = await Game.findAll({
             where: {
                 status: 'playing',
@@ -68,7 +75,7 @@ setInterval(async () => {
                 noClock: false,
                 lastMoveTimestamp: { [Op.ne]: null }
             }
-        });
+        }).catch(() => []); // Se falhar a query, retorna vazio
 
         for (const game of activeGames) {
             const elapsed = Math.floor((now - new Date(game.lastMoveTimestamp)) / 1000);
@@ -81,7 +88,7 @@ setInterval(async () => {
                     status: 'finished',
                     winner: `${winner} (Tempo)`,
                     [`timer${game.turn === 'w' ? 'White' : 'Black'}`]: 0
-                });
+                }).catch(e => console.error('Falha ao atualizar jogo por timeout:', e));
 
                 // Registrar evento de tempo no histórico
                 await Move.create({
@@ -95,13 +102,16 @@ setInterval(async () => {
                         timers: { w: game.timerWhite, b: game.timerBlack },
                         winner: `${winner} (Tempo)`
                     }
-                });
+                }).catch(e => console.error('Falha ao criar registro de timeout:', e));
 
                 io.to(game.roomCode).emit('game_over_time', { winner: `${winner} (Tempo)` });
             }
         }
     } catch (err) {
-        console.error('Erro no loop de checagem de tempo:', err);
+        // Log discreto do erro recorrente se o banco estiver fora
+        if (err.name !== 'SequelizeConnectionError' && err.name !== 'SequelizeAccessDeniedError') {
+            console.error('Erro no loop de checagem de tempo:', err);
+        }
     }
 }, 5000);
 
