@@ -1,5 +1,6 @@
 const { Chess } = require('chess.js');
 const Game = require('../models/Game');
+const Move = require('../models/Move');
 
 /**
  * Geração de código de sala de 6 dígitos alfanuméricos
@@ -11,6 +12,31 @@ const generateCode = () => {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return code;
+};
+
+/**
+ * Converte o estado do chess.js (board()) para um objeto estilo chessboard.js {'a1': 'wR'}
+ */
+const getBoardSnapshot = (chess) => {
+    try {
+        const board = {};
+        const ranks = '87654321';
+        const files = 'abcdefgh';
+        const raw = chess.board();
+        
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                const piece = raw[i][j];
+                if (piece) {
+                    const square = files[j] + ranks[i];
+                    board[square] = piece.color + piece.type.toUpperCase();
+                }
+            }
+        }
+        return board;
+    } catch (e) {
+        return {};
+    }
 };
 
 // Mapa socket.id -> código de sala (para desconexão)
@@ -30,21 +56,35 @@ module.exports = (io) => {
                 const game = await Game.create({
                     roomCode: code,
                     noClock: !!settings.noClock,
-                    status: 'waiting',
+                    status: settings.local ? 'playing' : 'waiting',
                     whiteSessionId: sessionId,
                     timerWhite: 600,
                     timerBlack: 600,
                     fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-                    turn: 'w'
+                    turn: 'w',
+                    lastMoveTimestamp: settings.local ? new Date() : null
                 });
 
                 socket.join(code);
                 socketToRoom.set(socket.id, code);
 
+                // Se for jogo local, já cria o primeiro movimento (estado inicial)
+                if (settings.local) {
+                    await Move.create({
+                        gameId: game.id,
+                        fen: game.fen,
+                        move: null,
+                        player: 'w',
+                        event: 'start',
+                        boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
+                        metadata: { local: true, timers: { w: 600, b: 600 } }
+                    });
+                }
+
                 socket.emit('room_created', {
                     code,
                     color: 'w',
-                    settings: { noClock: game.noClock }
+                    settings: { noClock: game.noClock, local: settings.local }
                 });
 
             } catch (err) {
@@ -95,6 +135,20 @@ module.exports = (io) => {
                     paused: false
                 });
 
+                // Registrar o início da partida no histórico de movimentos com súmula completa
+                await Move.create({
+                    gameId: game.id,
+                    fen: game.fen,
+                    move: null,
+                    player: 'w',
+                    event: 'start',
+                    boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
+                    metadata: {
+                        timers: { w: game.timerWhite, b: game.timerBlack },
+                        settings: { noClock: game.noClock }
+                    }
+                });
+
                 // Notifica ambos
                 io.to(roomCode).emit('game_start', {
                     code: game.roomCode,
@@ -141,6 +195,8 @@ module.exports = (io) => {
                     else if (chess.isDraw()) winner = 'Empate';
                 }
 
+                const playerWhoMoved = game.turn;
+
                 await game.update({
                     fen: chess.fen(),
                     pgn: chess.pgn(),
@@ -150,6 +206,25 @@ module.exports = (io) => {
                     timerWhite: whiteTime,
                     timerBlack: blackTime,
                     lastMoveTimestamp: now
+                });
+
+                // SALVAR NOVO MOVIMENTO NO BANCO DE DADOS (SÚMULA COMPLETA)
+                await Move.create({
+                    gameId: game.id,
+                    fen: chess.fen(),
+                    move: result.san || result.lan || JSON.stringify(result),
+                    player: playerWhoMoved,
+                    isCheck: chess.isCheck(),
+                    isCheckmate: chess.isCheckmate(),
+                    isDraw: chess.isDraw(),
+                    event: 'move',
+                    boardSnapshot: getBoardSnapshot(chess),
+                    metadata: {
+                        timers: { w: whiteTime, b: blackTime },
+                        turn: chess.turn(),
+                        status,
+                        winner
+                    }
                 });
 
                 io.to(code).emit('move_made', {
@@ -205,6 +280,22 @@ module.exports = (io) => {
                 const game = await Game.findOne({ where: { roomCode: code } });
                 if (game) {
                     await game.update({ status: 'finished', winner: 'Desistência' });
+
+                    // Salvar evento de desistência no banco
+                    const chess = new Chess(game.fen);
+                    await Move.create({
+                        gameId: game.id,
+                        fen: game.fen,
+                        move: null,
+                        player: game.turn,
+                        event: 'resign',
+                        boardSnapshot: getBoardSnapshot(chess),
+                        metadata: {
+                            timers: { w: game.timerWhite, b: game.timerBlack },
+                            winner: 'Desistência'
+                        }
+                    });
+
                     io.to(code).emit('game_over', { winner: 'Desistência' });
                 }
             } catch (e) { console.error('Erro ao desistir:', e); }

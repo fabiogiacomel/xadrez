@@ -7,6 +7,27 @@ const cors = require('cors');
 
 const sequelize = require('./src/config/database');
 const Game = require('./src/models/Game');
+const Move = require('./src/models/Move');
+const { Chess } = require('chess.js');
+
+const getBoardSnapshot = (chess) => {
+    try {
+        const board = {};
+        const ranks = '87654321';
+        const files = 'abcdefgh';
+        const raw = chess.board();
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                const piece = raw[i][j];
+                if (piece) {
+                    const square = files[j] + ranks[i];
+                    board[square] = piece.color + piece.type.toUpperCase();
+                }
+            }
+        }
+        return board;
+    } catch (e) { return {}; }
+};
 const apiRoutes = require('./src/routes/api');
 const gameHandler = require('./src/sockets/gameHandler');
 
@@ -77,6 +98,20 @@ setInterval(async () => {
                     status: 'finished',
                     winner: `${winner} (Tempo)`,
                     [`timer${game.turn === 'w' ? 'White' : 'Black'}`]: 0
+                });
+
+                // Registrar evento de tempo no histórico
+                await Move.create({
+                    gameId: game.id,
+                    fen: game.fen,
+                    move: null,
+                    player: game.turn, // Quem perdeu por tempo
+                    event: 'timeout',
+                    boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
+                    metadata: {
+                        timers: { w: game.timerWhite, b: game.timerBlack },
+                        winner: `${winner} (Tempo)`
+                    }
                 });
 
                 io.to(game.roomCode).emit('game_over_time', { winner: `${winner} (Tempo)` });

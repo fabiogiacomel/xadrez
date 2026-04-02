@@ -181,6 +181,9 @@ function onDrop(source, target) {
 
     if (isLocalMode) {
         handleLocalMove(move);
+        if (myRoomCode) {
+            socket.emit('make_move', { code: myRoomCode, move: moveObj });
+        }
     } else {
         isWaitingForServer = true;
         socket.emit('make_move', { code: myRoomCode, move: moveObj });
@@ -240,6 +243,12 @@ function startLocalGame() {
     isTimerPaused = false;
     myRoomCode = null;
 
+    // Solicitar código de sala "local" para persistência no banco
+    socket.emit('create_room', { 
+        settings: { local: true },
+        sessionId: localStorage.getItem('chess_session_id') || 'local_' + Math.random().toString(36).substring(2)
+    });
+
     showScreen('game-screen');
     
     // UI Resets
@@ -247,12 +256,7 @@ function startLocalGame() {
     if (roomCodeContainer) roomCodeContainer.hidden = true;
     const gameRoomCodeSection = document.getElementById('game-room-code-section');
     if (gameRoomCodeSection) gameRoomCodeSection.hidden = true;
-    const createBtn = document.getElementById('create-online-btn');
-    if (createBtn) {
-        createBtn.innerText = 'CRIAR PARTIDA ONLINE';
-        createBtn.disabled = false;
-        createBtn.style.opacity = '1';
-    }
+    
     const pauseBtn = document.getElementById('pause-timer-btn');
     if (pauseBtn) {
         pauseBtn.innerText = '⏸ Pausar';
