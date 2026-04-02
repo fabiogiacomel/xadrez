@@ -18,19 +18,7 @@ const socket = io({
 
 // --- STATE ---
 let board = null;
-let game = null;
-try {
-    if (typeof Chess === 'function') {
-        game = new Chess();
-    } else if (typeof Chess?.Chess === 'function') {
-        game = new Chess.Chess();
-    } else {
-        console.error('Construtor Chess não encontrado no escopo global.');
-    }
-} catch(e) {
-    console.error('Motor de Xadrez falhou ao iniciar:', e);
-}
-
+let game = new Chess();
 let myRoomCode = null;
 let playerColor = 'w';
 let isGameOver = false;
@@ -87,7 +75,7 @@ function updateCapturedPieces() {
  */
 function updateStatus() {
     const statusText = document.getElementById('status-text');
-    if (!statusText || !game) return;
+    if (!statusText) return;
     if (isGameOver) return;
 
     if (isTimerPaused) {
@@ -117,7 +105,6 @@ function updateTimerDisplay() {
     if (tb) tb.innerText = format(timers.b);
 
     document.querySelectorAll('.timer').forEach(t => t.classList.remove('active'));
-    if (!game) return;
     const turn = game.turn();
     const activeId = turn === 'w' ? 'timer-white' : 'timer-black';
     document.getElementById(activeId)?.classList.add('active');
@@ -139,7 +126,6 @@ function endGame(winner) {
  * Atualiza toda a interface após um movimento
  */
 function updateGameUI(fen, move, timers, status, winner) {
-    if (!game) return;
     if (fen) {
         game.load(fen);
         board.position(fen);
@@ -163,10 +149,10 @@ function updateGameUI(fen, move, timers, status, winner) {
     const pgnLog = document.getElementById('pgn-log');
     if (pgnLog) pgnLog.innerText = game.pgn();
     
-    if (status === 'finished' || game.isGameOver()) {
+    if (status === 'finished' || game.game_over()) {
         let finalWinner = winner;
-        if (!finalWinner && game.isGameOver()) {
-            if (game.isCheckmate()) finalWinner = (game.turn() === 'w' ? 'Pretas' : 'Brancas');
+        if (!finalWinner && game.game_over()) {
+            if (game.in_checkmate()) finalWinner = (game.turn() === 'w' ? 'Pretas' : 'Brancas');
             else finalWinner = 'Empate';
         }
         endGame(finalWinner);
@@ -180,8 +166,8 @@ function removeHighlights() {
 }
 
 function onDragStart(source, piece, position, orientation) {
-    if (!game || isGameOver || isWaitingForServer || isTimerPaused) return false;
-    if (game.isGameOver()) return false;
+    if (isGameOver || isWaitingForServer || isTimerPaused) return false;
+    if (game.game_over()) return false;
 
     if (!isLocalMode) {
         if ((playerColor === 'w' && piece.search(/^b/) !== -1) ||
@@ -198,7 +184,6 @@ function onDragStart(source, piece, position, orientation) {
 }
 
 function onDrop(source, target) {
-    if (!game) return 'snapback';
     removeHighlights();
     
     let moveObj = { from: source, to: target };
@@ -225,7 +210,6 @@ function onDrop(source, target) {
 }
 
 function onSnapEnd() {
-    if (!game || !board) return;
     board.position(game.fen());
 }
 
@@ -241,7 +225,6 @@ function initBoard(fen) {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     };
     board = Chessboard('board', config);
-    if (!game) return;
     game.load(f);
 }
 
@@ -250,7 +233,7 @@ function initBoard(fen) {
 function startRoomClock() {
     if (roomInterval) clearInterval(roomInterval);
     roomInterval = setInterval(() => {
-        if (!game || isGameOver || isTimerPaused || isNoClockMode) return;
+        if (isGameOver || isTimerPaused || isNoClockMode) return;
         
         const turn = game.turn();
         if (isLocalMode) {
@@ -383,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     isLocalMode = true;
                     showScreen('game-screen');
                     initBoard(data.fen);
-                    if (data.pgn) game.loadPgn(data.pgn);
+                    if (data.pgn) game.load_pgn(data.pgn);
                     if (data.timers) localTimers = data.timers;
                     updateStatus();
                     updateCapturedPieces();
