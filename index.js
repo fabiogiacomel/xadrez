@@ -127,6 +127,7 @@ io.on('connection', (socket) => {
     
     // Notify both players that the game started
     io.to(code).emit('game_start', {
+      code: code, // Enviar o código para que o segundo jogador o salve
       fen: room.chess.fen(),
       players: room.players,
       timers: room.timers,

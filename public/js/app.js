@@ -406,8 +406,9 @@ function stopLocalTimer() {
 }
 
 // 7. Socket Events (Online Mode)
-socket.on('game_start', ({ fen, players, timers, settings }) => {
+socket.on('game_start', ({ code, fen, players, timers, settings }) => {
     isLocalMode = false;
+    myRoomCode = code; // Salvar o código da sala para que as Pretas também possam enviar jogadas
     isNoClockMode = settings?.noClock || false;
     isTimerPaused = settings?.paused || false;
     
