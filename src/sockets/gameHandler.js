@@ -70,7 +70,7 @@ module.exports = (io) => {
                 socket.join(roomCode);
                 socketToRoom.set(socket.id, roomCode);
 
-                // Reconexão
+                // 1. Caso de Reconexão (Brancas ou Pretas voltando)
                 if (sessionId === game.whiteSessionId || sessionId === game.blackSessionId) {
                     const color = sessionId === game.whiteSessionId ? 'w' : 'b';
 
@@ -88,39 +88,35 @@ module.exports = (io) => {
                     });
                 }
 
-                // Novo jogador (Pretas)
-                if (game.status !== 'waiting') {
-                    return socket.emit('error_message', 'Esta sala não está mais disponível.');
+                // 2. Novo jogador entrando em uma partida (Transformando Local -> Online)
+                // Permitimos entrar se o campo blackSessionId estiver vazio, independente do status ser 'waiting' ou 'playing'
+                if (!game.blackSessionId) {
+                    await game.update({
+                        status: 'playing',
+                        blackSessionId: sessionId,
+                        lastMoveTimestamp: new Date(),
+                        paused: false
+                    });
+
+                    // Notifica o novo jogador que ele é as Pretas
+                    socket.emit('game_start', {
+                        code: game.roomCode,
+                        fen: game.fen,
+                        timers: { w: game.timerWhite, b: game.timerBlack },
+                        playerColor: 'b',
+                        settings: { noClock: game.noClock }
+                    });
+
+                    // Notifica o criador (Brancas) que o oponente entrou
+                    socket.to(roomCode).emit('player_connected', {
+                        message: 'Oponente entrou na sala!'
+                    });
+
+                    return;
                 }
 
-                await game.update({
-                    status: 'playing',
-                    blackSessionId: sessionId,
-                    lastMoveTimestamp: new Date(),
-                    paused: false
-                });
-
-                // Registrar o início da partida no histórico de movimentos com súmula completa
-                await Move.create({
-                    gameId: game.id,
-                    fen: game.fen,
-                    move: null,
-                    player: 'w',
-                    event: 'start',
-                    boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
-                    metadata: {
-                        timers: { w: game.timerWhite, b: game.timerBlack },
-                        settings: { noClock: game.noClock }
-                    }
-                });
-
-                // Notifica ambos
-                io.to(roomCode).emit('game_start', {
-                    code: game.roomCode,
-                    fen: game.fen,
-                    timers: { w: game.timerWhite, b: game.timerBlack },
-                    settings: { noClock: game.noClock }
-                });
+                // 3. Sala cheia
+                return socket.emit('error_message', 'Esta sala já está cheia.');
 
             } catch (err) {
                 console.error('Erro ao entrar na sala:', err);

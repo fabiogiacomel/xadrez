@@ -257,15 +257,15 @@ function showScreen(screenId) {
     }
 }
 
-function startLocalGame() {
+function startNewGame() {
     isLocalMode = true;
     isTimerPaused = false;
     myRoomCode = null;
 
-    // Solicitar código de sala "local" para persistência no banco
+    // Todas as partidas agora nascem 'locais' no banco de dados para persistência
     socket.emit('create_room', { 
         settings: { local: true },
-        sessionId: localStorage.getItem('chess_session_id') || 'local_' + Math.random().toString(36).substring(2)
+        sessionId: mySessionId
     });
 
     showScreen('game-screen');
@@ -274,7 +274,7 @@ function startLocalGame() {
     const roomCodeContainer = document.getElementById('room-code-container');
     if (roomCodeContainer) roomCodeContainer.hidden = true;
     const gameRoomCodeSection = document.getElementById('game-room-code-section');
-    if (gameRoomCodeSection) gameRoomCodeSection.hidden = true;
+    if (gameRoomCodeSection) gameRoomCodeSection.hidden = false;
     
     const pauseBtn = document.getElementById('pause-timer-btn');
     if (pauseBtn) {
@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('menu-home')?.addEventListener('click', () => location.reload());
     document.getElementById('menu-local')?.addEventListener('click', () => {
         toggleMenu(false);
-        startLocalGame();
+        startNewGame();
     });
     document.getElementById('menu-about')?.addEventListener('click', () => {
         toggleMenu(false);
@@ -322,10 +322,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Main Buttons
-    document.getElementById('create-online-btn')?.addEventListener('click', () => {
-        isLocalMode = false;
-        socket.emit('create_room', { sessionId: mySessionId });
-        document.getElementById('create-online-btn').innerText = 'CRIANDO...';
+    document.getElementById('start-game-btn')?.addEventListener('click', () => {
+        startNewGame();
     });
 
     document.getElementById('join-btn')?.addEventListener('click', () => {
@@ -346,7 +344,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('local-game-btn')?.addEventListener('click', () => startLocalGame());
+
+
 
     // Restore Session Controls
     const restoreBtn = document.getElementById('restore-session-btn');
@@ -407,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('game_start', ({ code, fen, playerColor: serverColor, timers }) => {
         myRoomCode = code;
         if (serverColor) playerColor = serverColor;
-        isLocalMode = false;
+        isLocalMode = (serverColor === undefined); // Se o servidor não mandou cor, ainda estamos em 'setup' ou modo local
         if (timers) remoteTimers = timers;
         
         showScreen('game-screen');
@@ -415,12 +414,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateStatus();
         updateCapturedPieces();
         startRoomClock();
+        
+        // Mostrar o código da sala para permitir convite
+        if (document.getElementById('game-room-code-section')) document.getElementById('game-room-code-section').hidden = false;
+        if (document.getElementById('game-room-code')) document.getElementById('game-room-code').innerText = code;
     });
 
     socket.on('error_message', (msg) => { 
         alert("Erro: " + msg); 
-        const createBtn = document.getElementById('create-online-btn');
-        if (createBtn) createBtn.innerText = 'CRIAR PARTIDA ONLINE';
+        const startBtn = document.getElementById('start-game-btn');
+        if (startBtn) startBtn.innerText = 'INICIAR NOVA PARTIDA';
         const joinBtn = document.getElementById('join-btn');
         if (joinBtn) joinBtn.innerText = 'ENTRAR';
     });
