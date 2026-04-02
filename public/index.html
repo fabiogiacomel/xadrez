@@ -6,14 +6,21 @@
     <meta name="description" content="Xadrez online premium: jogue com amigos em tempo real com interface moderna e visual deslumbrante.">
     <meta name="theme-color" content="#1a1a1a">
 
+    <!-- Anti-Cache Meta Tags -->
+    <meta http-equiv="cache-control" content="no-cache, must-revalidate, post-check=0, pre-check=0">
+    <meta http-equiv="cache-control" content="max-age=0">
+    <meta http-equiv="expires" content="0">
+    <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT">
+    <meta http-equiv="pragma" content="no-cache">
+
     <title>Xadrez Premium | Giacomel Art</title>
 
     <!-- Preload de recursos críticos -->
     <link rel="preload" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" as="style">
     
-    <!-- CSS -->
+    <!-- CSS (with Cache Busting) -->
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=20260402_0948">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
@@ -170,11 +177,11 @@
         </footer>
     </div>
 
-    <!-- Scripts no final (melhor performance) -->
+    <!-- Scripts no final (melhor performance + Cache Busting) -->
     <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js" defer></script>
+    <script src="js/app.js?v=20260402_0948" defer></script>
 </body>
 </html>
