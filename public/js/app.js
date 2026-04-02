@@ -1,6 +1,11 @@
 const socket = io();
 let board = null;
-let game = new Chess();
+let game;
+try {
+    game = new Chess();
+} catch(e) {
+    console.error('Chess.js não carregado!');
+}
 let myRoomCode = null;
 let playerColor = 'w';
 let isGameOver = false;
@@ -49,31 +54,33 @@ const menuLocal = document.getElementById('menu-local');
 const menuAbout = document.getElementById('menu-about');
 
 // 1. Initial Room Creation (Online)
-socket.emit('create_room');
+function initSocket() {
+    socket.emit('create_room');
 
-socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
-    myRoomCode = code;
-    myRoomCodeDisplay.innerText = code;
-    if (!isLocalMode) playerColor = color;
-    
-    if (restored) {
-        isNoClockMode = settings?.noClock || false;
-        isTimerPaused = settings?.paused || false;
+    socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
+        myRoomCode = code;
+        if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
+        if (!isLocalMode) playerColor = color;
         
-        welcomeScreen.classList.remove('active');
-        gameScreen.classList.add('active');
-        mgmtControls.style.display = 'grid';
-        timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
-        
-        statusText.innerText = 'Partida Restaurada! Aguardando oponente...';
-        initBoard(fen);
-        game.load(fen); // Load FEN into local chess instance
-        if (!isNoClockMode) updateTimers(timers);
-        updatePauseUI(isTimerPaused);
-        updatePGN();
-        updateCapturedPieces();
-    }
-});
+        if (restored) {
+            isNoClockMode = settings?.noClock || false;
+            isTimerPaused = settings?.paused || false;
+            
+            welcomeScreen.classList.remove('active');
+            gameScreen.classList.add('active');
+            mgmtControls.style.display = 'grid';
+            timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
+            
+            statusText.innerText = 'Partida Restaurada! Aguardando oponente...';
+            initBoard(fen);
+            game.load(fen); // Load FEN into local chess instance
+            if (!isNoClockMode) updateTimers(timers);
+            updatePauseUI(isTimerPaused);
+            updatePGN();
+            updateCapturedPieces();
+        }
+    });
+}
 
 // 2. Navigation & Mode Selection
 joinBtn.addEventListener('click', () => {
@@ -595,3 +602,8 @@ function updateCapturedPieces() {
         document.getElementById('captured-opponent').innerHTML = captured[opponentCapturedColor].join(' ');
     }
 }
+// Initialize app
+document.addEventListener('DOMContentLoaded', () => {
+    initSocket();
+    console.log('Xadrez pronto para jogar!');
+});
