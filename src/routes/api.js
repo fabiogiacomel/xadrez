@@ -106,6 +106,121 @@ router.get('/games/:code/history', async (req, res) => {
     }
 });
 
+// Endpoint para uma LLM criar uma nova sala
+router.post('/games', async (req, res) => {
+    try {
+        const apiKey = req.headers['authorization']?.split(' ')[1];
+        if (apiKey !== process.env.ANTIGRAVITY_API_KEY) {
+            return res.status(403).json({ error: 'Chave API inválida.' });
+        }
+
+        const { settings = {} } = req.body;
+        
+        // Gerador de código (reutilizando a lógica do handler se estivesse exportada, mas faremos aqui)
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+
+        const game = await Game.create({
+            roomCode: code,
+            noClock: !!settings.noClock,
+            status: 'waiting',
+            whiteSessionId: 'llm_session_' + Date.now(),
+            fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+            turn: 'w'
+        });
+
+        res.status(201).json({
+            roomCode: game.roomCode,
+            color: 'w',
+            message: 'Sala criada. Forneça o código ao oponente.'
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao criar sala via API.' });
+    }
+});
+
+// Endpoint para uma LLM realizar uma jogada
+router.post('/games/:code/move', async (req, res) => {
+    try {
+        const apiKey = req.headers['authorization']?.split(' ')[1];
+        if (apiKey !== process.env.ANTIGRAVITY_API_KEY) {
+            return res.status(403).json({ error: 'Chave API inválida.' });
+        }
+
+        const { move } = req.body;
+        const code = req.params.code.toUpperCase();
+        const game = await Game.findOne({ where: { roomCode: code } });
+
+        if (!game || game.status !== 'playing') {
+            return res.status(400).json({ error: 'Partida não está ativa ou não existe.' });
+        }
+
+        const { Chess } = require('chess.js');
+        const chess = new Chess(game.fen);
+        const result = chess.move(move);
+
+        if (!result) {
+            return res.status(400).json({ error: 'Movimento inválido.' });
+        }
+
+        const now = new Date();
+        const playerWhoMoved = game.turn;
+
+        await game.update({
+            fen: chess.fen(),
+            pgn: chess.pgn(),
+            turn: chess.turn(),
+            status: chess.isGameOver() ? 'finished' : 'playing',
+            winner: chess.isCheckmate() ? (playerWhoMoved === 'w' ? 'Brancas' : 'Pretas') : (chess.isDraw() ? 'Empate' : null),
+            lastMoveTimestamp: now
+        });
+
+        // Registrar no histórico (Súmula)
+        const MoveModel = require('../models/Move');
+        const getBoardSnapshot = (c) => {
+            try {
+                const b = {};
+                const r = '87654321', f = 'abcdefgh', raw = c.board();
+                for(let i=0; i<8; i++) for(let j=0; j<8; j++) if(raw[i][j]) b[f[j]+r[i]] = raw[i][j].color + raw[i][j].type.toUpperCase();
+                return b;
+            } catch(e) { return {}; }
+        };
+
+        await MoveModel.create({
+            gameId: game.id,
+            fen: chess.fen(),
+            move: result.san,
+            player: playerWhoMoved,
+            isCheck: chess.isCheck(),
+            isCheckmate: chess.isCheckmate(),
+            isDraw: chess.isDraw(),
+            event: 'move',
+            boardSnapshot: getBoardSnapshot(chess),
+            metadata: { via_api: true, timers: { w: game.timerWhite, b: game.timerBlack } }
+        });
+
+        // NOTIFICAR INTERFACE VIA SOCKET
+        const io = req.app.get('io');
+        if (io) {
+            io.to(code).emit('move_made', {
+                fen: chess.fen(),
+                move: result,
+                timers: { w: game.timerWhite, b: game.timerBlack },
+                turn: chess.turn(),
+                status: game.status,
+                winner: game.winner
+            });
+        }
+
+        res.json({ success: true, fen: chess.fen(), turn: chess.turn() });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro ao processar jogada via API.' });
+    }
+});
+
 // Endpoint para exportar o jogo em formato JSONL (para treinamento de LLM)
 router.get('/games/:code/jsonl', async (req, res) => {
     try {
