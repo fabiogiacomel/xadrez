@@ -16,6 +16,7 @@ window.App = {
         timers: { w: 600, b: 600 },
         pgn: '',
         statusText: 'Iniciando...',
+        showAbout: false,
         sessionId: localStorage.getItem('chess_session_id') || ('sess_' + Math.random().toString(36).substring(2))
     },
 
@@ -61,9 +62,16 @@ window.App = {
 
             s.on('room_created', (data) => {
                 console.log('📡 [DEBUG] Sala criada no servidor:', data.code);
-                this.updateState({ myRoomCode: data.code, playerColor: data.color || 'w', statusText: 'Aguardando oponente...' });
-                this.initBoard();
-                this.startClock();
+                this.updateState({ 
+                    myRoomCode: data.code, 
+                    playerColor: data.color || 'w', 
+                    statusText: (this.state.isLocalMode) ? 'Modo Local (Sincronizado)' : 'Aguardando oponente...' 
+                });
+                // Só inicializa se o tabuleiro ainda não existir
+                if (!this.state.board) {
+                    this.initBoard();
+                    this.startClock();
+                }
             });
 
             s.on('game_start', (data) => {
@@ -172,7 +180,10 @@ window.App = {
         if (myCodeSpan) myCodeSpan.innerText = this.state.myRoomCode || '......';
 
         const gameCodeSpan = document.getElementById('game-room-code');
-        if (gameCodeSpan) gameCodeSpan.innerText = (this.state.myRoomCode && this.state.myRoomCode !== 'CARREGANDO...') ? this.state.myRoomCode : '';
+        const hideCodes = ['CARREGANDO...', 'LOCAL'];
+        if (gameCodeSpan) {
+            gameCodeSpan.innerText = (this.state.myRoomCode && !hideCodes.includes(this.state.myRoomCode)) ? this.state.myRoomCode : '';
+        }
 
         const pgnLog = document.getElementById('pgn-log');
         if (pgnLog) pgnLog.innerText = this.state.game.pgn();
@@ -229,10 +240,23 @@ window.App = {
 
         listen('start-game-btn', 'click', () => {
             console.log('🖱️ [DEBUG] Click em INICIAR!');
-            this.updateState({ myRoomCode: 'CARREGANDO...', isLocalMode: true, statusText: 'Iniciando partida...' });
+            // Força a transição imediata para o modo local
+            this.updateState({ 
+                myRoomCode: 'LOCAL', 
+                isLocalMode: true, 
+                statusText: 'Iniciando partida...',
+                showAbout: false 
+            });
             this.initBoard();
             this.startClock();
-            if (this.socket) this.socket.emit('create_room', { settings: { local: true }, sessionId: this.state.sessionId });
+            
+            // Tenta avisar o servidor para persistência (não bloqueia se falhar)
+            if (this.socket) {
+                this.socket.emit('create_room', { 
+                    settings: { local: true }, 
+                    sessionId: this.state.sessionId 
+                });
+            }
         });
 
         listen('join-btn', 'click', () => {
@@ -258,7 +282,11 @@ window.App = {
         });
 
         listen('menu-home', 'click', () => location.reload());
-        listen('menu-about', 'click', () => this.updateState({ showAbout: true, myRoomCode: null }));
+        listen('menu-about', 'click', () => this.updateState({ showAbout: true }));
+        listen('menu-local', 'click', () => {
+            document.getElementById('close-menu')?.click();
+            document.getElementById('start-game-btn')?.click();
+        });
         listen('menu-btn', 'click', () => {
             document.getElementById('side-menu')?.classList.add('active');
             document.getElementById('menu-overlay')?.classList.add('active');
@@ -314,6 +342,15 @@ window.App = {
         });
 
         listen('restart-btn', 'click', () => location.reload());
+    }
+};
+
+// Helpers globais para compatibilidade com HTML
+window.showScreen = (screenId) => {
+    if (screenId === 'welcome-screen') {
+        App.updateState({ showAbout: false });
+    } else if (screenId === 'about-screen') {
+        App.updateState({ showAbout: true });
     }
 };
 
