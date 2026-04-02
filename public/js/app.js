@@ -20,9 +20,15 @@ const socket = io({
 let board = null;
 let game = null;
 try {
-    game = new Chess();
+    if (typeof Chess === 'function') {
+        game = new Chess();
+    } else if (typeof Chess?.Chess === 'function') {
+        game = new Chess.Chess();
+    } else {
+        console.error('Construtor Chess não encontrado no escopo global.');
+    }
 } catch(e) {
-    console.error('Motor de Xadrez falhou ao iniciar!');
+    console.error('Motor de Xadrez falhou ao iniciar:', e);
 }
 
 let myRoomCode = null;
@@ -81,7 +87,7 @@ function updateCapturedPieces() {
  */
 function updateStatus() {
     const statusText = document.getElementById('status-text');
-    if (!statusText) return;
+    if (!statusText || !game) return;
     if (isGameOver) return;
 
     if (isTimerPaused) {
@@ -111,7 +117,8 @@ function updateTimerDisplay() {
     if (tb) tb.innerText = format(timers.b);
 
     document.querySelectorAll('.timer').forEach(t => t.classList.remove('active'));
-    const turn = game ? game.turn() : 'w';
+    if (!game) return;
+    const turn = game.turn();
     const activeId = turn === 'w' ? 'timer-white' : 'timer-black';
     document.getElementById(activeId)?.classList.add('active');
 }
@@ -132,6 +139,7 @@ function endGame(winner) {
  * Atualiza toda a interface após um movimento
  */
 function updateGameUI(fen, move, timers, status, winner) {
+    if (!game) return;
     if (fen) {
         game.load(fen);
         board.position(fen);
@@ -172,7 +180,7 @@ function removeHighlights() {
 }
 
 function onDragStart(source, piece, position, orientation) {
-    if (isGameOver || isWaitingForServer || isTimerPaused) return false;
+    if (!game || isGameOver || isWaitingForServer || isTimerPaused) return false;
     if (game.isGameOver()) return false;
 
     if (!isLocalMode) {
@@ -190,6 +198,7 @@ function onDragStart(source, piece, position, orientation) {
 }
 
 function onDrop(source, target) {
+    if (!game) return 'snapback';
     removeHighlights();
     
     let moveObj = { from: source, to: target };
@@ -216,6 +225,7 @@ function onDrop(source, target) {
 }
 
 function onSnapEnd() {
+    if (!game || !board) return;
     board.position(game.fen());
 }
 
@@ -231,6 +241,7 @@ function initBoard(fen) {
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     };
     board = Chessboard('board', config);
+    if (!game) return;
     game.load(f);
 }
 
@@ -239,7 +250,7 @@ function initBoard(fen) {
 function startRoomClock() {
     if (roomInterval) clearInterval(roomInterval);
     roomInterval = setInterval(() => {
-        if (isGameOver || isTimerPaused || isNoClockMode) return;
+        if (!game || isGameOver || isTimerPaused || isNoClockMode) return;
         
         const turn = game.turn();
         if (isLocalMode) {
