@@ -140,12 +140,26 @@ io.on('connection', (socket) => {
             });
 
             socket.join(code);
-            io.to(code).emit('game_start', {
+            
+            // 1. Avisa o SEGUNDO JOGADOR que ele entrou como PRETAS
+            socket.emit('game_start', {
                 code: game.roomCode,
                 fen: game.fen,
                 timers: { w: game.timerWhite, b: game.timerBlack },
                 settings: { noClock: game.noClock },
-                playerColor: 'b', // Novo jogador é sempre pretas
+                playerColor: 'b',
+                players: [
+                    { id: 'remoto_w', color: 'w' },
+                    { id: 'remoto_b', color: 'b' }
+                ]
+            });
+
+            // 2. Avisa o PRIMEIRO JOGADOR (Brancas) que a partida começou (sem mudar a cor dele)
+            socket.to(code).emit('game_start', {
+                code: game.roomCode,
+                fen: game.fen,
+                timers: { w: game.timerWhite, b: game.timerBlack },
+                settings: { noClock: game.noClock },
                 players: [
                     { id: 'remoto_w', color: 'w' },
                     { id: 'remoto_b', color: 'b' }

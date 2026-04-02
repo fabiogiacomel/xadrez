@@ -48,9 +48,11 @@
             <!-- Screen 1: Welcome & Code Sharing -->
             <section id="welcome-screen" class="active">
                 <div class="card">
-                    <h2 style="margin-bottom: 2rem; color: var(--accent-color); font-family: 'Outfit';">MENU PRINCIPAL</h2>
-                    
-                    <div class="code-display" title="Seu código para um novo jogo">
+                    <div class="mode-buttons" style="margin-bottom: 2rem;">
+                        <button id="create-online-btn" class="btn-primary" style="width: 100%; margin-bottom: 1rem; height: 60px; font-size: 1.1rem; letter-spacing: 2px;">CRIAR PARTIDA ONLINE</button>
+                    </div>
+
+                    <div class="code-display" title="Seu código para um novo jogo" id="room-code-container" style="display: none;">
                         <span id="my-room-code">......</span>
                         <button id="copy-code-btn" title="Copiar código">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -58,21 +60,18 @@
                     </div>
 
                     <div class="join-section" style="margin-bottom: 1.5rem;">
-                        <input type="text" id="join-code-input" placeholder="INSIRA O CÓDIGO PARA ENTRAR" maxlength="6">
-                        <button id="join-btn" class="btn-primary">ENTRAR EM PARTIDA FRANCESA</button>
+                        <input type="text" id="join-code-input" placeholder="DIGITE O CÓDIGO DO AMIGO" maxlength="6">
+                        <button id="join-btn" class="btn-secondary" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">ENTRAR EM SALA EXISTENTE</button>
                     </div>
 
-                    <div class="divider">Modos de Jogo</div>
+                    <div class="divider">Outras Opções</div>
 
                     <div class="mode-buttons">
                         <button id="local-game-btn" class="btn-secondary">JOGAR LOCAL</button>
-                        <button id="no-clock-btn" class="btn-no-clock">SEM RELÓGIO</button>
+                        <button id="restore-session-btn" class="btn-restore">RESTAURAR (JSON)</button>
                     </div>
 
-                    <div style="margin-top: 1rem;">
-                        <input type="file" id="restore-session-input" style="display: none;" accept=".json">
-                        <button id="restore-session-btn" class="btn-restore">RESTAURAR PARTIDA (JSON)</button>
-                    </div>
+                    <input type="file" id="restore-session-input" style="display: none;" accept=".json">
                 </div>
             </section>
 

@@ -19,9 +19,11 @@ let isTimerPaused = false;
 // DOM Elements
 const welcomeScreen = document.getElementById('welcome-screen');
 const gameScreen = document.getElementById('game-screen');
+const roomCodeContainer = document.getElementById('room-code-container');
 const myRoomCodeDisplay = document.getElementById('my-room-code');
 const joinCodeInput = document.getElementById('join-code-input');
 const joinBtn = document.getElementById('join-btn');
+const createOnlineBtn = document.getElementById('create-online-btn');
 const localGameBtn = document.getElementById('local-game-btn');
 const abandonBtn = document.getElementById('abandon-btn');
 const copyCodeBtn = document.getElementById('copy-code-btn');
@@ -34,7 +36,6 @@ const capturedPlayer = document.getElementById('captured-player');
 const capturedOpponent = document.getElementById('captured-opponent');
 const flipToggleContainer = document.getElementById('flip-toggle-container');
 const flipToggle = document.getElementById('flip-toggle');
-const noClockBtn = document.getElementById('no-clock-btn');
 const timersContainer = document.querySelector('.timers');
 const add5mBtn = document.getElementById('add-5m-btn');
 const pauseTimerBtn = document.getElementById('pause-timer-btn');
@@ -63,21 +64,20 @@ function getSessionId() {
     return sid;
 }
 
-// 1. Initial Room Creation (Online)
+// 1. Initial Room Check (Online)
 function initSocket() {
-    // Tenta reconectar automaticamente se houver um código na URL (opcional) ou apenas inicializa
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('room');
     if (code) {
         joinCodeInput.value = code;
         socket.emit('join_room', { code, sessionId: getSessionId() });
-    } else {
-        socket.emit('create_room', { sessionId: getSessionId() });
     }
-
+    // NÃO criamos mais sala automaticamente aqui!
+    
     socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
         myRoomCode = code;
         if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
+        if (roomCodeContainer) roomCodeContainer.style.display = 'flex';
         if (!isLocalMode) playerColor = color;
         
         // Atualiza a URL sem recarregar para facilitar o compartilhamento
@@ -105,6 +105,11 @@ function initSocket() {
 }
 
 // 2. Navigation & Mode Selection
+createOnlineBtn.addEventListener('click', () => {
+    isLocalMode = false;
+    socket.emit('create_room', { sessionId: getSessionId() });
+});
+
 joinBtn.addEventListener('click', () => {
     const code = joinCodeInput.value.trim().toUpperCase();
     if (code) {
@@ -118,12 +123,6 @@ localGameBtn.addEventListener('click', () => {
     isNoClockMode = false;
     timersContainer.style.display = 'grid';
     startLocalGame();
-});
-
-noClockBtn.addEventListener('click', () => {
-    isNoClockMode = true;
-    timersContainer.style.display = 'none';
-    socket.emit('create_room', { settings: { noClock: true }, sessionId: getSessionId() });
 });
 
 abandonBtn.addEventListener('click', () => {
@@ -310,12 +309,15 @@ function resetToMenu() {
     
     welcomeScreen.classList.add('active');
     gameScreen.classList.remove('active');
+    if (roomCodeContainer) roomCodeContainer.style.display = 'none';
+    if (joinCodeInput) joinCodeInput.value = '';
+    
     flipToggleContainer.style.display = 'none';
     mgmtControls.style.display = 'none';
     restartBtn.style.display = 'none';
     isNoClockMode = false;
     timersContainer.style.display = 'grid';
-    socket.emit('create_room');
+    // NÃO criamos mais sala automaticamente aqui!
 }
 
 // 5. Board Implementation
