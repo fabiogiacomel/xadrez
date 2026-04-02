@@ -312,10 +312,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('join-btn')?.addEventListener('click', () => {
-        const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
+        const codeInput = document.getElementById('join-code-input');
+        const code = codeInput?.value.trim().toUpperCase();
         if (code) {
             isLocalMode = false;
             socket.emit('join_room', { code, sessionId: mySessionId });
+            const joinBtn = document.getElementById('join-btn');
+            if (joinBtn) joinBtn.innerText = 'Buscando...';
+        }
+    });
+
+    // Permitir pressionar Enter no campo de código
+    document.getElementById('join-code-input')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('join-btn')?.click();
         }
     });
 
@@ -361,6 +371,8 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Erro: " + msg); 
         const createBtn = document.getElementById('create-online-btn');
         if (createBtn) createBtn.innerText = 'CRIAR PARTIDA ONLINE';
+        const joinBtn = document.getElementById('join-btn');
+        if (joinBtn) joinBtn.innerText = 'ENTRAR';
     });
 
     socket.on('game_over_time', ({ winner }) => endGame(winner));
