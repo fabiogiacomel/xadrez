@@ -7,8 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node index.js",
-    "build": "echo 'No build step required, serving from public/'"
+    "start": "node index.js"
   },
   "keywords": [
     "chess",
