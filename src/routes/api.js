@@ -12,11 +12,50 @@ router.get('/games', async (req, res) => {
             return res.status(403).json({ error: 'Chave API inválida.' });
         }
 
+        const { status } = req.query;
+        const where = status ? { status } : {};
+
         const games = await Game.findAll({
+            where,
             limit: 50,
             order: [['updatedAt', 'DESC']]
         });
         res.json(games);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Erro interno.' });
+    }
+});
+
+// Endpoint para listar apenas partidas em tempo real (ativas)
+router.get('/games/live', async (req, res) => {
+    try {
+        const apiKey = req.headers['authorization']?.split(' ')[1];
+        if (apiKey !== process.env.ANTIGRAVITY_API_KEY) {
+            return res.status(403).json({ error: 'Chave API inválida.' });
+        }
+
+        const activeGames = await Game.findAll({
+            where: { status: 'playing' },
+            order: [['updatedAt', 'DESC']]
+        });
+
+        const liveData = await Promise.all(activeGames.map(async (game) => {
+            const lastMove = await Move.findOne({
+                where: { gameId: game.id },
+                order: [['createdAt', 'DESC']]
+            });
+            return {
+                roomCode: game.roomCode,
+                fen: game.fen,
+                turn: game.turn,
+                timers: { w: game.timerWhite, b: game.timerBlack },
+                lastMove: lastMove ? lastMove.move : null,
+                updatedAt: game.updatedAt
+            };
+        }));
+
+        res.json(liveData);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Erro interno.' });
