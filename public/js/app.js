@@ -44,6 +44,8 @@ window.App = {
                 playerColor: data.color || 'w',
                 statusText: 'Aguardando oponente...'
             });
+            this.initBoard(); // Inicializa o tabuleiro imediatamente para o criador
+            this.startClock(); // Inicia o relógio local
         });
 
         s.on('game_start', (data) => {
@@ -146,12 +148,26 @@ window.App = {
 
     // 5. INTERFACE (RENDERIZAÇÃO)
     render() {
-        // Atualiza telas
-        const screens = ['welcome-screen', 'game-screen', 'about-screen'];
-        screens.forEach(s => {
-            const el = document.getElementById(s);
-            if (el) el.classList.toggle('active', el.id === (this.state.myRoomCode ? 'game-screen' : (this.state.showAbout ? 'about-screen' : 'welcome-screen')));
-        });
+        // Logica de troca de tela (mais robusta com fallback)
+        const isGameStarted = (this.state.myRoomCode !== null);
+        
+        const welcome = document.getElementById('welcome-screen');
+        const game = document.getElementById('game-screen');
+        const about = document.getElementById('about-screen');
+
+        if (this.state.showAbout) {
+            if (welcome) welcome.classList.remove('active');
+            if (game) game.classList.remove('active');
+            if (about) about.classList.add('active');
+        } else if (isGameStarted) {
+            if (welcome) welcome.classList.remove('active');
+            if (about) about.classList.remove('active');
+            if (game) game.classList.add('active');
+        } else {
+            if (game) game.classList.remove('active');
+            if (about) about.classList.remove('active');
+            if (welcome) welcome.classList.add('active');
+        }
 
         // Atualiza texto de status
         const statusEl = document.getElementById('status-text');
@@ -233,8 +249,18 @@ window.App = {
         const listen = (id, evt, fn) => document.getElementById(id)?.addEventListener(evt, fn.bind(this));
 
         listen('start-game-btn', 'click', () => {
+            console.log('Botão Iniciar clicado!');
+            // 1. Inicia LOCALMENTE na hora para ser instantâneo
+            this.updateState({ 
+                myRoomCode: 'CARREGANDO...', 
+                isLocalMode: true,
+                statusText: 'Iniciando partida local...' 
+            });
+            this.initBoard();
+            this.startClock();
+
+            // 2. Avisa o servidor em background para salvar e obter código real
             this.socket.emit('create_room', { settings: { local: true }, sessionId: this.state.sessionId });
-            // Não mudamos a tela aqui, esperamos o 'room_created' ou 'game_start'
         });
 
         listen('join-btn', 'click', () => {
