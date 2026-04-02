@@ -437,17 +437,27 @@ socket.on('game_start', ({ code, fen, players, timers, settings }) => {
 
 socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
     if (isLocalMode) return;
-    
-    // Ao invés de game.load() que zera o histórico, nós 'jogamos' o movimento para manter a súmula
+
     if (move) {
-        const localMove = game.move(move.san);
-        if (!localMove) game.load(fen); // Fallback de segurança caso dê erro
+        // Usa as coordenadas exatas enviadas pelo servidor no lugar do SAN.
+        // Isso impede falhas de tradução e mantém a Súmula intacta!
+        const localMove = game.move({
+            from: move.from,
+            to: move.to,
+            promotion: move.promotion || 'q'
+        });
+        
+        // Se ainda assim der algum erro muito crítico, usa o FEN como emergência
+        if (!localMove) {
+            console.warn("Falha de sincronização da Súmula. Forçando recarregamento da posição.");
+            game.load(fen);
+        }
     } else {
         game.load(fen);
     }
-    
+
     board.position(fen);
-    
+
     removeHighlights();
     if (move) {
         $(`#board .square-${move.from}`).addClass('highlight-last-move');
