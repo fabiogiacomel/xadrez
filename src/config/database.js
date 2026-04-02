@@ -8,8 +8,8 @@ const sequelize = new Sequelize(
     {
         host: process.env.DB_HOST || '127.0.0.1',
         dialect: 'mysql',
-        dialectOptions: {
-            socketPath: '/tmp/mysql.sock' // Crucial para MySQL na Hostinger
+        dialectOptions: process.env.DB_HOST?.includes('.') ? {} : {
+            socketPath: '/tmp/mysql.sock' 
         },
         logging: false
     }
