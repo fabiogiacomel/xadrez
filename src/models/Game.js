@@ -13,7 +13,7 @@ const Game = sequelize.define('Game', {
     },
     fen: {
         type: DataTypes.STRING(255),
-        defaultValue: 'start'
+        defaultValue: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
     },
     pgn: {
         type: DataTypes.TEXT,

@@ -95,12 +95,17 @@ function initSocket() {
     
     socket.on('room_created', ({ code, color, settings, restored, fen, timers }) => {
         myRoomCode = code;
+        console.log(`Sala Criada: ${code}, Cor: ${color}, Restorada: ${restored}`);
+
         if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
         if (roomCodeContainer) roomCodeContainer.style.display = 'flex';
         
         // Novo: Mostra o código na tela de jogo também
         if (gameRoomCodeDisplay) gameRoomCodeDisplay.innerText = code;
-        if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'block';
+        if (gameRoomCodeSection) {
+            gameRoomCodeSection.style.display = 'block';
+            console.log('Mostrando código na tela de jogo.');
+        }
 
         if (!isLocalMode) playerColor = color || 'w';
         
@@ -115,9 +120,19 @@ function initSocket() {
         timersContainer.style.display = (settings?.noClock) ? 'none' : 'grid';
         
         statusText.innerText = restored ? 'Partida Restaurada!' : 'Aguardando Oponente...';
-        initBoard(fen || 'start');
-        game.load(fen || 'start');
         
+        // Lógica segura de FEN
+        const initialFen = fen && fen !== 'start' ? fen : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        
+        initBoard(initialFen);
+        if (initialFen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
+            game.reset();
+        } else {
+            game.load(initialFen);
+        }
+        
+        console.log('Motor de Xadrez sincronizado. Turno:', game.turn(), 'Cor do Jogador:', playerColor);
+
         if (restored) {
             if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'none'; // Se já restaurou e está jogando, esconde o código
             if (!isNoClockMode && timers) updateTimers(timers);
@@ -491,10 +506,19 @@ socket.on('game_start', ({ code, fen, players, timers, settings, playerColor: se
         if (me) playerColor = me.color;
     }
 
-    initBoard(fen);
-    game.load(fen);
+    // Lógica segura de FEN
+    const initialFen = fen && fen !== 'start' ? fen : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    
+    initBoard(initialFen);
+    if (initialFen === 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1') {
+        game.reset();
+    } else {
+        game.load(initialFen);
+    }
+    
     if (!isNoClockMode) updateTimers(timers);
     updateTurnIndicator(game.turn());
+    console.log('Partida iniciada! Seus movimentos agora são validados.');
 });
 
 socket.on('move_made', ({ fen, move, timers, turn, status, winner }) => {
