@@ -115,10 +115,10 @@ io.on('connection', (socket) => {
                     fen: game.fen,
                     timers: { w: game.timerWhite, b: game.timerBlack },
                     settings: { noClock: game.noClock, paused: game.paused },
-                    playerColor: color, // Informa ao cliente qual é a cor dele
+                    playerColor: color, // Reconexão: Informa ao cliente qual é a cor dele
                     players: [
-                        { id: 'remoto', color: 'w' },
-                        { id: 'remoto', color: 'b' }
+                        { id: 'remoto_w', color: 'w' },
+                        { id: 'remoto_b', color: 'b' }
                     ]
                 });
             }
@@ -145,6 +145,7 @@ io.on('connection', (socket) => {
                 fen: game.fen,
                 timers: { w: game.timerWhite, b: game.timerBlack },
                 settings: { noClock: game.noClock },
+                playerColor: 'b', // Novo jogador é sempre pretas
                 players: [
                     { id: 'remoto_w', color: 'w' },
                     { id: 'remoto_b', color: 'b' }

@@ -434,7 +434,12 @@ function stopLocalTimer() {
 // 7. Socket Events (Online Mode)
 socket.on('game_start', ({ code, fen, players, timers, settings, playerColor: serverColor }) => {
     isLocalMode = false;
-    myRoomCode = code; // Salvar o código da sala para que as Pretas também possam enviar jogadas
+    myRoomCode = code; // Salva o código localmente
+
+    // Sincroniza a URL do navegador para que F5 funcione corretamente
+    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?room=' + code;
+    window.history.pushState({ path: newUrl }, '', newUrl);
+
     isNoClockMode = settings?.noClock || false;
     isTimerPaused = settings?.paused || false;
     
@@ -448,7 +453,6 @@ socket.on('game_start', ({ code, fen, players, timers, settings, playerColor: se
     abandonBtn.innerText = 'ABANDONAR PARTIDA';
     
     // Se o servidor enviou a cor explicitamente (Reconexão), usa ela. 
-    // Caso contrário, tenta achar pelo ID do socket (Legacy/Primeira entrada).
     if (serverColor) {
         playerColor = serverColor;
     } else if (players) {
