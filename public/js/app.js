@@ -1,4 +1,19 @@
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling'], // Prioriza WebSocket
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 2000
+});
+
+// Ao reconectar (ex: após erro 400 ou trocar de rede), tenta re-entrar na sala
+socket.on('reconnect', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('room') || myRoomCode;
+    console.log('Reconectado! Sincronizando estado para sala:', code);
+    if (code) {
+        socket.emit('join_room', { code, sessionId: getSessionId() });
+    }
+});
 let board = null;
 let game;
 try {
