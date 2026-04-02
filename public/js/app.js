@@ -437,7 +437,27 @@ function updateStatus() {
 
 function startLocalGame() {
     isLocalMode = true;
+    isTimerPaused = false; // Reset pause state
+    myRoomCode = null; // Clear room code
+
+    // UI Updates
     showScreen('game-screen');
+    const roomCodeContainer = document.getElementById('room-code-container');
+    if (roomCodeContainer) roomCodeContainer.hidden = true;
+    const gameRoomCodeSection = document.getElementById('game-room-code-section');
+    if (gameRoomCodeSection) gameRoomCodeSection.hidden = true;
+    const createBtn = document.getElementById('create-online-btn');
+    if (createBtn) {
+        createBtn.innerText = 'CRIAR PARTIDA ONLINE';
+        createBtn.disabled = false;
+        createBtn.style.opacity = '1';
+    }
+    const pauseBtn = document.getElementById('pause-timer-btn');
+    if (pauseBtn) {
+        pauseBtn.innerText = '⏸ Pausar';
+        pauseBtn.classList.remove('paused');
+    }
+
     localTimers = { w: 600, b: 600 };
     initBoard();
     updateStatus();
