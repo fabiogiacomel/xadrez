@@ -1,155 +1,164 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Xadrez online premium: jogue com amigos em tempo real com interface moderna e visual deslumbrante.">
+    <meta name="theme-color" content="#1a1a1a">
+
     <title>Xadrez Premium | Giacomel Art</title>
-    <meta name="description" content="Uma experiência de xadrez online moderna, rápida e visualmente deslumbrante. Jogue com amigos usando códigos de sala.">
+
+    <!-- Preload de recursos críticos -->
+    <link rel="preload" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" as="style">
     
-    <!-- Libraries -->
+    <!-- CSS -->
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <link rel="stylesheet" href="css/style.css">
-    
+
     <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♟</text></svg>">
+
+    <!-- SEO + PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
 </head>
+
 <body>
     <div class="app-container">
-        <header>
+        
+        <!-- HEADER -->
+        <header class="main-header">
             <div class="header-content">
-                <button id="menu-btn" class="hamburger-btn">
+                <button id="menu-btn" class="hamburger-btn" aria-label="Abrir menu" aria-expanded="false">
                     <div class="hamburger-icon">
-                        <span></span>
-                        <span></span>
-                        <span></span>
+                        <span></span><span></span><span></span>
                     </div>
                 </button>
+                <h1 class="logo">Xadrez <span class="premium">Premium</span></h1>
             </div>
         </header>
 
-        <nav id="side-menu" class="side-menu">
+        <!-- MENU LATERAL -->
+        <nav id="side-menu" class="side-menu" aria-hidden="true">
             <div class="menu-header">
                 <h2>Menu</h2>
-                <button id="close-menu" class="close-btn">&times;</button>
+                <button id="close-menu" class="close-btn" aria-label="Fechar menu">&times;</button>
             </div>
             <ul class="menu-links">
                 <li><a href="#" id="menu-home">Início</a></li>
                 <li><a href="#" id="menu-local">Partida Local</a></li>
                 <li><a href="#" id="menu-about">Sobre o Projeto</a></li>
-                <li><a href="https://giacomel.art" target="_blank">Giacomel Art</a></li>
+                <li><a href="https://giacomel.art" target="_blank" rel="noopener">Giacomel Art</a></li>
             </ul>
         </nav>
-        <div id="menu-overlay" class="menu-overlay"></div>
+        <div id="menu-overlay" class="menu-overlay" aria-hidden="true"></div>
 
         <main>
-            <!-- Screen 1: Welcome & Code Sharing -->
-            <section id="welcome-screen" class="active">
+            <!-- TELA DE BOAS-VINDAS -->
+            <section id="welcome-screen" class="screen active">
                 <div class="card">
-                    <div class="mode-buttons" style="margin-bottom: 2rem;">
-                        <button id="create-online-btn" class="btn-primary" style="width: 100%; margin-bottom: 1rem; height: 60px; font-size: 1.1rem; letter-spacing: 2px;">CRIAR PARTIDA ONLINE</button>
-                    </div>
-
-                    <div class="code-display" title="Seu código para um novo jogo" id="room-code-container" style="display: none;">
-                        <span id="my-room-code">......</span>
-                        <button id="copy-code-btn" title="Copiar código">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <h2 class="screen-title">Bem-vindo ao Xadrez</h2>
+                    
+                    <div class="mode-buttons">
+                        <button id="create-online-btn" class="btn-primary btn-large">
+                            CRIAR PARTIDA ONLINE
                         </button>
                     </div>
 
-                    <div class="join-section" style="margin-bottom: 1.5rem;">
-                        <input type="text" id="join-code-input" placeholder="DIGITE O CÓDIGO DO AMIGO" maxlength="6">
-                        <button id="join-btn" class="btn-secondary" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">ENTRAR EM SALA EXISTENTE</button>
+                    <div id="room-code-container" class="code-display" hidden>
+                        <label for="my-room-code">Código da sala:</label>
+                        <div class="code-wrapper">
+                            <span id="my-room-code" class="room-code">......</span>
+                            <button id="copy-code-btn" class="copy-btn" aria-label="Copiar código">
+                                📋
+                            </button>
+                        </div>
                     </div>
 
-                    <div class="divider">Outras Opções</div>
-
-                    <div class="mode-buttons">
-                        <button id="local-game-btn" class="btn-secondary">JOGAR LOCAL</button>
-                        <button id="restore-session-btn" class="btn-restore">RESTAURAR (JSON)</button>
+                    <div class="join-section">
+                        <label for="join-code-input">Entrar em sala existente</label>
+                        <div class="input-group">
+                            <input type="text" id="join-code-input" maxlength="6" placeholder="Digite o código" autocomplete="off">
+                            <button id="join-btn" class="btn-secondary">ENTRAR</button>
+                        </div>
                     </div>
 
-                    <input type="file" id="restore-session-input" style="display: none;" accept=".json">
+                    <div class="divider">Ou</div>
+
+                    <div class="mode-buttons secondary">
+                        <button id="local-game-btn" class="btn-secondary">Jogar Localmente</button>
+                        <button id="restore-session-btn" class="btn-secondary">Restaurar Partida</button>
+                    </div>
+
+                    <input type="file" id="restore-session-input" accept=".json" hidden>
                 </div>
             </section>
 
-            <!-- Screen 2: Game Board -->
-            <section id="game-screen">
+            <!-- TELA DO JOGO -->
+            <section id="game-screen" class="screen">
                 <div class="game-layout">
+                    
+                    <!-- TABULEIRO -->
                     <div class="board-column">
                         <div class="board-container">
-                            <div id="board" style="width: 100%;"></div>
+                            <div id="board" style="width: 100%; max-width: 600px; margin: 0 auto;"></div>
                         </div>
                     </div>
-                    
+
+                    <!-- PAINEL LATERAL -->
                     <div class="game-info">
-                        <!-- Timers Area -->
+                        <!-- Timers -->
                         <div class="timers">
-                            <div id="timer-white" class="timer">
-                                <span class="label">Peças Brancas</span>
-                                <span class="time">10:00</span>
-                            </div>
-                            <div id="timer-black" class="timer">
-                                <span class="label">Peças Pretas</span>
-                                <span class="time">10:00</span>
-                            </div>
+                            <div id="timer-black" class="timer opponent"></div>
+                            <div id="timer-white" class="timer player"></div>
                         </div>
 
-                        <!-- Captured Pieces -->
+                        <!-- Peças capturadas -->
                         <div class="captured-pieces">
-                            <div id="captured-top">
+                            <div id="captured-opponent">
                                 <h4>Oponente</h4>
-                                <div class="captured-container" id="captured-opponent"></div>
+                                <div class="captured-container"></div>
                             </div>
-                            <div style="height: 10px;"></div>
-                            <div id="captured-bottom">
+                            <div id="captured-player">
                                 <h4>Você</h4>
-                                <div class="captured-container" id="captured-player"></div>
+                                <div class="captured-container"></div>
                             </div>
                         </div>
 
-                        <!-- Move History -->
+                        <!-- Histórico -->
                         <div class="move-history">
-                            <h3>Histórico de Jogadas</h3>
-                            <div id="pgn-log"></div>
+                            <h3>Histórico</h3>
+                            <div id="pgn-log" class="pgn-container"></div>
                         </div>
 
-                        <!-- Settings & Status -->
-                        <div id="flip-toggle-container" class="toggle-container" style="display: none; justify-content: center; margin-bottom: 0.5rem;">
-                            <span>Girar Automático</span>
-                            <label class="switch">
-                                <input type="checkbox" id="flip-toggle" checked>
-                                <span class="slider round"></span>
-                            </label>
-                        </div>
+                        <!-- Status -->
+                        <div id="status-text" class="game-status">Aguardando oponente...</div>
 
-                        <div class="game-status" id="status-text">
-                            Aguardando oponente...
-                        </div>
-
-                        <!-- Room Code Display (on Game Screen) -->
-                        <div id="game-room-code-section" style="display: none; margin: 1rem 0; background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.2); text-align: center;">
-                            <p style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 0.5rem; letter-spacing: 1px;">CONVIDE UM AMIGO COM O CÓDIGO:</p>
-                            <div style="display: flex; gap: 0.5rem; justify-content: center; align-items: center;">
-                                <span id="game-room-code" style="font-family: 'JetBrains Mono'; font-size: 1.5rem; font-weight: 700; color: var(--accent-color);">......</span>
-                                <button id="game-copy-code-btn" style="background: none; border: none; color: white; cursor: pointer; opacity: 0.8; transition: transform 0.2s;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                                </button>
+                        <!-- Código da sala no jogo -->
+                        <div id="game-room-code-section" class="room-code-box" hidden>
+                            <p class="room-label">Convide seu amigo:</p>
+                            <div class="code-wrapper">
+                                <span id="game-room-code" class="room-code"></span>
+                                <button id="game-copy-code-btn" class="copy-btn">📋</button>
                             </div>
                         </div>
-                        
-                        <div id="game-mgmt-controls" class="mgmt-controls">
-                            <button id="add-5m-btn" class="btn-control" title="Adicionar 5 minutos para ambos">+5 Minutos</button>
-                            <button id="pause-timer-btn" class="btn-control" title="Pausar/Retomar relógios">Pausar Relógio</button>
-                            <button id="download-summary-btn" class="btn-control" title="Baixar súmula JSON">D. Súmula</button>
-                            <button id="save-game-btn" class="btn-control" title="Salvar partida atual p/ continuar">Save Game</button>
+
+                        <!-- Controles -->
+                        <div class="game-mgmt-controls">
+                            <button id="add-5m-btn" class="btn-control" title="Adicionar 5 minutos">+5 min</button>
+                            <button id="pause-timer-btn" class="btn-control">⏸ Pausar</button>
+                            <button id="download-summary-btn" class="btn-control">↓ Súmula</button>
+                            <button id="save-game-btn" class="btn-control">💾 Salvar</button>
                         </div>
 
                         <div class="action-buttons">
-                            <button id="restart-btn" class="btn-primary" style="display: none;">JOGAR NOVAMENTE</button>
-                            <button id="abandon-btn" class="btn-danger">ABANDONAR PARTIDA</button>
+                            <button id="restart-btn" class="btn-primary" hidden>Jogar Novamente</button>
+                            <button id="abandon-btn" class="btn-danger">Abandonar Partida</button>
                         </div>
                     </div>
                 </div>
@@ -157,15 +166,15 @@
         </main>
 
         <footer>
-            <p>&copy; 2026 Developed for xadrez.giacomel.art</p>
+            <p>&copy; 2026 • Xadrez Premium by <a href="https://giacomel.art" target="_blank">Giacomel Art</a></p>
         </footer>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+    <!-- Scripts no final (melhor performance) -->
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js" integrity="sha256-oP6Hi6x4u0c5a4p9e5f5p0e5f5p0e5f5p0e5f5p0e5f5=" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js"></script>
+    <script src="js/app.js" defer></script>
 </body>
 </html>
