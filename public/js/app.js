@@ -341,7 +341,9 @@ function onDrop(source, target) {
     if (isLocalMode) {
         handleLocalMove(move);
     } else {
-        socket.emit('make_move', { code: myRoomCode, move: move });
+        // Enviar apenas o SAN (Standard Algebraic Notation) para o servidor.
+        // Isso evita incompatibilidades de estrutura de objeto entre as versões do chess.js.
+        socket.emit('make_move', { code: myRoomCode, move: move.san });
     }
 }
 

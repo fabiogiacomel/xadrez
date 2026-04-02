@@ -153,8 +153,8 @@ io.on('connection', (socket) => {
         if (!room.settings?.noClock) {
           const now = Date.now();
           const elapsed = Math.floor((now - room.lastMoveTime) / 1000);
-          const color = player.color;
-          room.timers[color] = Math.max(0, room.timers[color] - elapsed);
+          const pColor = player.color;
+          room.timers[pColor] = Math.max(0, room.timers[pColor] - elapsed);
           room.lastMoveTime = now;
         }
 
@@ -164,10 +164,10 @@ io.on('connection', (socket) => {
 
         if (room.chess.isCheckmate()) {
           status = 'finished';
-          winner = color === 'w' ? 'White' : 'Black';
+          winner = player.color === 'w' ? 'Brancas' : 'Pretas';
         } else if (room.chess.isDraw()) {
           status = 'finished';
-          winner = 'Draw';
+          winner = 'Empate';
         }
 
         room.status = status;
@@ -181,8 +181,10 @@ io.on('connection', (socket) => {
           status,
           winner
         });
+        console.log(`Move made in room ${code} by ${player.color}: ${typeof move === 'string' ? move : 'obj'}`);
       }
     } catch (e) {
+      console.error(`Error in room ${code} move:`, e);
       socket.emit('error_message', 'Movimento inválido.');
     }
   });
