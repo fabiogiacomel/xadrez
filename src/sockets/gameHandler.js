@@ -172,9 +172,11 @@ module.exports = (io) => {
                 }
 
                 const chess = new Chess();
+                const standardFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+                
                 if (game.pgn) {
                     chess.loadPgn(game.pgn);
-                } else if (game.fen) {
+                } else if (game.fen && game.fen !== standardFen) {
                     chess.load(game.fen);
                 }
                 const result = chess.move(move);
