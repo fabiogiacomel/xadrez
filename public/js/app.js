@@ -69,6 +69,10 @@ const menuHome = document.getElementById('menu-home');
 const menuLocal = document.getElementById('menu-local');
 const menuAbout = document.getElementById('menu-about');
 
+const gameRoomCodeSection = document.getElementById('game-room-code-section');
+const gameRoomCodeDisplay = document.getElementById('game-room-code');
+const gameCopyCodeBtn = document.getElementById('game-copy-code-btn');
+
 // 0. Session Management
 function getSessionId() {
     let sid = localStorage.getItem('chess_session_id');
@@ -93,6 +97,11 @@ function initSocket() {
         myRoomCode = code;
         if (myRoomCodeDisplay) myRoomCodeDisplay.innerText = code;
         if (roomCodeContainer) roomCodeContainer.style.display = 'flex';
+        
+        // Novo: Mostra o código na tela de jogo também
+        if (gameRoomCodeDisplay) gameRoomCodeDisplay.innerText = code;
+        if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'block';
+
         if (!isLocalMode) playerColor = color || 'w';
         
         // Atualiza a URL sem recarregar para facilitar o compartilhamento
@@ -108,8 +117,10 @@ function initSocket() {
         statusText.innerText = restored ? 'Partida Restaurada!' : 'Aguardando Oponente...';
         initBoard(fen || 'start');
         game.load(fen || 'start');
-        if (!isNoClockMode && timers) updateTimers(timers);
+        
         if (restored) {
+            if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'none'; // Se já restaurou e está jogando, esconde o código
+            if (!isNoClockMode && timers) updateTimers(timers);
             updatePauseUI(settings?.paused || false);
             updatePGN();
             updateCapturedPieces();
@@ -158,12 +169,15 @@ flipToggle.addEventListener('change', (e) => {
     shouldFlip = e.target.checked;
 });
 
-copyCodeBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(myRoomCode);
-    const originalContent = copyCodeBtn.innerHTML;
-    copyCodeBtn.innerHTML = '<span style="color: #10b981; font-size: 0.8rem">Ok!</span>';
-    setTimeout(() => copyCodeBtn.innerHTML = originalContent, 2000);
-});
+function handleCopy(code, btn) {
+    navigator.clipboard.writeText(code);
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<span style="color: #10b981; font-size: 0.8rem">Ok!</span>';
+    setTimeout(() => btn.innerHTML = originalContent, 2000);
+}
+
+copyCodeBtn.addEventListener('click', () => handleCopy(myRoomCode, copyCodeBtn));
+gameCopyCodeBtn.addEventListener('click', () => handleCopy(myRoomCode, gameCopyCodeBtn));
 
 if (restartBtn) {
     restartBtn.addEventListener('click', () => {
@@ -462,6 +476,8 @@ socket.on('game_start', ({ code, fen, players, timers, settings, playerColor: se
     mgmtControls.style.display = 'grid';
     timersContainer.style.display = isNoClockMode ? 'none' : 'grid';
     updatePauseUI(isTimerPaused);
+    
+    if (gameRoomCodeSection) gameRoomCodeSection.style.display = 'none';
     
     welcomeScreen.classList.remove('active');
     gameScreen.classList.add('active');
