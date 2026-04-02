@@ -341,9 +341,16 @@ function onDrop(source, target) {
     if (isLocalMode) {
         handleLocalMove(move);
     } else {
-        // Enviar apenas o SAN (Standard Algebraic Notation) para o servidor.
-        // Isso evita incompatibilidades de estrutura de objeto entre as versões do chess.js.
-        socket.emit('make_move', { code: myRoomCode, move: move.san });
+        // Desfaz o movimento local temporariamente para não dessincronizar.
+        // O tabuleiro será atualizado definitivamente quando o servidor emitir 'move_made'.
+        game.undo(); 
+        
+        // Envia as coordenadas exatas. Isso resolve de forma definitiva 
+        // a incompatibilidade entre as versões do chess.js (0.x no client, 1.x no server).
+        socket.emit('make_move', { 
+            code: myRoomCode, 
+            move: { from: source, to: target, promotion: 'q' } 
+        });
     }
 }
 
@@ -492,9 +499,15 @@ socket.on('game_restart', ({ fen, players, timers, settings }) => {
 socket.on('error_message', (msg) => {
     statusText.innerText = msg;
     statusText.style.color = '#ef4444';
+    
+    // Força o tabuleiro a voltar para a posição validada pelo servidor se houver erro
+    if (!isLocalMode && board && game) {
+        board.position(game.fen());
+    }
+    
     setTimeout(() => {
         statusText.style.color = '#10b981';
-        updateTurnIndicator(game.turn());
+        if (game) updateTurnIndicator(game.turn());
     }, 3000);
 });
 
