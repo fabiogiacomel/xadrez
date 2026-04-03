@@ -63,9 +63,10 @@ sequelize.authenticate()
         console.error('⚠️ O servidor continuará rodando, mas operações de banco podem falhar.');
     });
 
-// ====================== MONITORAMENTO DE TEMPO ======================
+// ====================== MONITORAMENTO DE TEMPO (OTIMIZADO) ======================
 const { Op } = require('sequelize');
-setInterval(async () => {
+
+async function checkGameTimers() {
     try {
         const now = new Date();
         const activeGames = await Game.findAll({
@@ -75,45 +76,50 @@ setInterval(async () => {
                 noClock: false,
                 lastMoveTimestamp: { [Op.ne]: null }
             }
-        }).catch(() => []); // Se falhar a query, retorna vazio
+        }).catch(() => []);
 
-        for (const game of activeGames) {
-            const elapsed = Math.floor((now - new Date(game.lastMoveTimestamp)) / 1000);
-            const currentTime = game.turn === 'w' ? game.timerWhite : game.timerBlack;
+        // Processar os jogos expirados em paralelo (evita loops bloqueantes)
+        await Promise.all(activeGames.map(async (game) => {
+            try {
+                const elapsed = Math.floor((now - new Date(game.lastMoveTimestamp)) / 1000);
+                const currentTime = game.turn === 'w' ? game.timerWhite : game.timerBlack;
 
-            if (currentTime - elapsed <= 0) {
-                const winner = game.turn === 'w' ? 'Pretas' : 'Brancas';
+                if (currentTime - elapsed <= 0) {
+                    const winner = game.turn === 'w' ? 'Pretas' : 'Brancas';
 
-                await game.update({
-                    status: 'finished',
-                    winner: `${winner} (Tempo)`,
-                    [`timer${game.turn === 'w' ? 'White' : 'Black'}`]: 0
-                }).catch(e => console.error('Falha ao atualizar jogo por timeout:', e));
+                    await game.update({
+                        status: 'finished',
+                        winner: `${winner} (Tempo)`,
+                        [`timer${game.turn === 'w' ? 'White' : 'Black'}`]: 0
+                    }).catch(e => console.error('Falha ao atualizar jogo por timeout:', e));
 
-                // Registrar evento de tempo no histórico
-                await Move.create({
-                    gameId: game.id,
-                    fen: game.fen,
-                    move: null,
-                    player: game.turn, // Quem perdeu por tempo
-                    event: 'timeout',
-                    boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
-                    metadata: {
-                        timers: { w: game.timerWhite, b: game.timerBlack },
-                        winner: `${winner} (Tempo)`
-                    }
-                }).catch(e => console.error('Falha ao criar registro de timeout:', e));
+                    await Move.create({
+                        gameId: game.id,
+                        fen: game.fen,
+                        move: null,
+                        player: game.turn,
+                        event: 'timeout',
+                        boardSnapshot: getBoardSnapshot(new Chess(game.fen)),
+                        metadata: { timers: { w: game.timerWhite, b: game.timerBlack }, winner: `${winner} (Tempo)` }
+                    }).catch(e => console.error('Falha ao registrar timeout:', e));
 
-                io.to(game.roomCode).emit('game_over_time', { winner: `${winner} (Tempo)` });
+                    io.to(game.roomCode).emit('game_over_time', { winner: `${winner} (Tempo)` });
+                }
+            } catch (innerErr) {
+                console.error(`Erro ao processar timeout do jogo ${game.id}:`, innerErr);
             }
-        }
+        }));
     } catch (err) {
-        // Log discreto do erro recorrente se o banco estiver fora
         if (err.name !== 'SequelizeConnectionError' && err.name !== 'SequelizeAccessDeniedError') {
             console.error('Erro no loop de checagem de tempo:', err);
         }
     }
-}, 5000);
+    // Agenda a próxima rodada APÓS o término (evita acúmulo de requisições ao banco)
+    setTimeout(checkGameTimers, 5000);
+}
+
+checkGameTimers();
+
 
 // ====================== SOCKET.IO ======================
 // Inicializar os handlers separados

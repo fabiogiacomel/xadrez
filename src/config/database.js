@@ -13,7 +13,13 @@ const sequelize = new Sequelize(
             // Se precisar de socket, use uma variável específica
             socketPath: process.env.DB_SOCKET || undefined
         },
-        logging: false
+        logging: false,
+        pool: {
+            max: 20,
+            min: 2,
+            acquire: 30000,
+            idle: 10000
+        }
     }
 );
 

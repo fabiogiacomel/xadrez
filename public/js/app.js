@@ -13,6 +13,8 @@ window.App = {
         isLocalMode: true,
         isTimerPaused: false,
         isWaitingForServer: false,
+        isPublic: false,
+        publicRooms: [],
         timers: { w: 600, b: 600 },
         pgn: '',
         statusText: 'Iniciando...',
@@ -61,7 +63,7 @@ window.App = {
             const s = this.socket;
 
             s.on('room_created', (data) => {
-                console.log('📡 [DEBUG] Sala criada no servidor:', data.code);
+                console.log('📡 [DEBUG] room_created recebido do servidor:', data.code);
                 this.updateState({
                     myRoomCode: data.code,
                     playerColor: data.color || 'w',
@@ -82,16 +84,64 @@ window.App = {
             });
 
             s.on('move_made', (data) => {
-                if (data.pgn) { this.state.game.load_pgn(data.pgn); } else if (data.fen) { this.state.game.load(data.fen); }
-                this.updateState({ isWaitingForServer: false, timers: data.timers || this.state.timers, isGameOver: data.status === 'finished' });
-                if (this.state.board) this.state.board.position(this.state.game.fen());
-                this.render();
+                console.log('♟️ [DEBUG] move_made recebido:', data.code);
+                try {
+                    // Limpa o estado de espera e atualiza timers
+                    this.updateState({ isWaitingForServer: false, timers: data.timers || this.state.timers, isGameOver: data.status === 'finished' });
+
+                    // Prioridade 1: Sincronizar pelo FEN (mais robusto)
+                    if (data.fen) {
+                        this.state.game.load(data.fen);
+                        if (this.state.board) this.state.board.position(data.fen);
+                    }
+
+                    // Prioridade 2: Sincronizar o PGN para histórico (compatível com v0.x e v1.x)
+                    if (data.pgn) {
+                        try {
+                            if (this.state.game.loadPgn) this.state.game.loadPgn(data.pgn);
+                            else if (this.state.game.load_pgn) this.state.game.load_pgn(data.pgn);
+                        } catch (pgnErr) {
+                            console.warn('⚠️ [DEBUG] PGN não pôde ser carregado sincronizadamente, mas FEN já atualizou.', pgnErr);
+                        }
+                    }
+
+                    this.render();
+                } catch (e) {
+                    console.error('❌ [DEBUG] Erro Crítico ao processar move_made:', e);
+                    this.updateState({ isWaitingForServer: false }); // Destrava a UI em caso de erro
+                }
             });
 
-            s.on('error_message', (msg) => alert('Erro: ' + msg));
+            s.on('opponent_joined', (data) => {
+                console.log('👤 [DEBUG] Oponente entrou:', data.sessionId);
+                this.updateState({ 
+                    isLocalMode: false, 
+                    statusText: 'Oponente conectado! Sua vez (Brancas).' 
+                });
+            });
+
+            s.on('error_message', (msg) => {
+                console.error('❌ [SERVER ERROR]:', msg);
+                this.updateState({ statusText: 'Erro: ' + msg });
+            });
             s.on('player_disconnected', (m) => this.updateState({ statusText: m.message }));
-            s.on('timer_update', (d) => this.updateState({ timers: d.timers }));
+            s.on('timer_update', (d) => {
+                console.log('🕒 [DEBUG] timer_update recebido:', d.timers);
+                this.updateState({ timers: d.timers });
+            });
             s.on('pause_updated', (d) => this.updateState({ isTimerPaused: d.paused }));
+            s.on('public_rooms_list', (rooms) => {
+                console.log('📋 [DEBUG] public_rooms_list recebido:', rooms.length);
+                this.updateState({ publicRooms: rooms });
+            });
+            s.on('public_status_updated', (data) => {
+                console.log('🌐 [DEBUG] public_status_updated recebido:', data.isPublic);
+                this.updateState({ isPublic: data.isPublic });
+            });
+            s.on('move_rejected', (data) => {
+                console.warn('♟️ [SERVER] Jogada recusada pelo servidor. Sincronizando...', data.fen);
+                this.syncWithServer(data.fen);
+            });
 
         } catch (e) {
             console.error('❌ Erro no Socket:', e);
@@ -135,11 +185,20 @@ window.App = {
 
         if (this.state.isLocalMode) {
             this.render();
-            if (this.state.myRoomCode) this.socket?.emit('make_move', { code: this.state.myRoomCode, move });
+            if (this.state.myRoomCode && this.state.myRoomCode !== 'LOCAL') {
+                this.socket?.emit('make_move', { code: this.state.myRoomCode, move });
+            }
         } else {
             this.updateState({ isWaitingForServer: true });
             this.socket?.emit('make_move', { code: this.state.myRoomCode, move });
         }
+    },
+
+    syncWithServer(fen) {
+        if (!fen) return;
+        this.state.game.load(fen);
+        if (this.state.board) this.state.board.position(fen);
+        this.render();
     },
 
     startClock() {
@@ -156,6 +215,38 @@ window.App = {
     endGame(winner) {
         this.updateState({ isGameOver: true, statusText: 'Fim de Jogo! Vencedor: ' + winner });
         if (this.clockInterval) clearInterval(this.clockInterval);
+    },
+
+    fetchPublicRooms() {
+        console.log('🔍 [DEBUG] Buscando salas públicas...');
+        document.getElementById('public-rooms-section')?.removeAttribute('hidden');
+        this.socket?.emit('get_public_rooms');
+    },
+
+    renderPublicRooms() {
+        const list = document.getElementById('public-rooms-list');
+        if (!list) return;
+
+        if (this.state.publicRooms.length === 0) {
+            list.innerHTML = '<p class="empty-msg">Nenhuma sala disponível no momento. Seja o primeiro a publicar!</p>';
+            return;
+        }
+
+        list.innerHTML = this.state.publicRooms.map(room => `
+            <div class="room-item">
+                <div class="room-info">
+                    <span class="room-code-tag">${room.code}</span>
+                    <span class="room-meta">Turno: ${room.turn === 'w' ? 'Brancas' : 'Pretas'} | Tempo: ${Math.floor(room.timerWhite / 60)} min</span>
+                </div>
+                <button class="btn-join-room" onclick="App.joinRoom('${room.code}')">JOGAR</button>
+            </div>
+        `).join('');
+    },
+
+    joinRoom(code) {
+        if (this.socket) {
+            this.socket.emit('join_room', { code, sessionId: this.state.sessionId });
+        }
     },
 
     render() {
@@ -190,6 +281,13 @@ window.App = {
 
         this.renderTimers();
         this.renderCapturedPieces();
+        this.renderPublicRooms();
+
+        const pubBtn = document.getElementById('toggle-public-btn');
+        if (pubBtn) {
+            pubBtn.classList.toggle('active-public', this.state.isPublic);
+            pubBtn.innerHTML = this.state.isPublic ? '🌐 Público On' : '🌍 Público Off';
+        }
     },
 
     renderTimers() {
@@ -259,19 +357,44 @@ window.App = {
             }
         });
 
+        listen('search-opponent-btn', 'click', () => {
+            this.fetchPublicRooms();
+        });
+
+        listen('refresh-rooms-btn', 'click', () => {
+            this.fetchPublicRooms();
+        });
+
+        listen('toggle-public-btn', 'click', () => {
+            if (this.state.myRoomCode) {
+                const newPublic = !this.state.isPublic;
+                this.socket?.emit('toggle_public', { code: this.state.myRoomCode, isPublic: newPublic });
+            }
+        });
+
         listen('join-btn', 'click', () => {
             const code = document.getElementById('join-code-input')?.value.trim().toUpperCase();
             if (code && this.socket) this.socket.emit('join_room', { code, sessionId: this.state.sessionId });
         });
 
         listen('pause-timer-btn', 'click', () => {
-            if (this.state.isLocalMode) this.updateState({ isTimerPaused: !this.state.isTimerPaused });
-            else this.socket?.emit('toggle_pause', this.state.myRoomCode);
+            const newPaused = !this.state.isTimerPaused;
+            this.updateState({ isTimerPaused: newPaused });
+            if (this.state.myRoomCode && this.state.myRoomCode !== 'LOCAL') {
+                this.socket?.emit('toggle_pause', this.state.myRoomCode);
+            }
         });
 
         listen('add-5m-btn', 'click', () => {
-            if (this.state.isLocalMode) { this.state.timers.w += 300; this.state.timers.b += 300; this.render(); }
-            else this.socket?.emit('add_time', this.state.myRoomCode);
+            // Atualiza localmente para feedback imediato
+            this.state.timers.w += 300;
+            this.state.timers.b += 300;
+            this.render();
+            
+            // Sincroniza com o servidor/banco de dados
+            if (this.state.myRoomCode && this.state.myRoomCode !== 'LOCAL') {
+                this.socket?.emit('add_time', this.state.myRoomCode);
+            }
         });
 
         listen('abandon-btn', 'click', () => {

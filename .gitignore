@@ -1,6 +1,32 @@
+# Dependencies
 node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+build/
+dist/
+
+# Misc
 .DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env
+
+# Project specific temp/test files
+b64.txt
+test_db.js
+tmp/
+.vscode/
+.idea/
+*.swp
+*.bak

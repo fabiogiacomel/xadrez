@@ -54,6 +54,10 @@ const Game = sequelize.define('Game', {
     winner: {
         type: DataTypes.STRING(50),
         allowNull: true
+    },
+    isPublic: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
     }
 });
 

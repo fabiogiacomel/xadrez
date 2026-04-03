@@ -13,10 +13,15 @@ module.exports = (io) => {
 
         // ==================== CRIAR SALA ====================
         socket.on('create_room', async ({ settings = {}, sessionId }) => {
+            console.log(`🏠 [SERVER] Recebido create_room de ${socket.id} (Session: ${sessionId})`);
             try {
-                if (!sessionId) return socket.emit('error_message', 'SessionId é obrigatório');
+                if (!sessionId) {
+                    console.warn(`⚠️ [SERVER] Tentativa de criar sala sem SessionId de ${socket.id}`);
+                    return socket.emit('error_message', 'SessionId é obrigatório');
+                }
 
                 const code = generateCode();
+                console.log(`✨ [SERVER] Gerando código: ${code}`);
 
                 const game = await Game.create({
                     roomCode: code,
@@ -25,6 +30,7 @@ module.exports = (io) => {
                     whiteSessionId: sessionId,
                     timerWhite: 600,
                     timerBlack: 600,
+                    isPublic: !!settings.isPublic,
                     fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
                     turn: 'w',
                     lastMoveTimestamp: settings.local ? new Date() : null
@@ -51,6 +57,7 @@ module.exports = (io) => {
                     color: 'w',
                     settings: { noClock: game.noClock, local: settings.local }
                 });
+                console.log(`📡 [SERVER] room_created emitido para ${socket.id} com código ${code}`);
 
             } catch (err) {
                 console.error('Erro ao criar sala:', err);
@@ -95,8 +102,14 @@ module.exports = (io) => {
                         status: 'playing',
                         blackSessionId: sessionId,
                         lastMoveTimestamp: new Date(),
-                        paused: false
+                        paused: false,
+                        isPublic: false
                     });
+
+                    socket.to(roomCode).emit('opponent_joined', {
+                        sessionId: sessionId
+                    });
+                    console.log(`👤 [SERVER] opponent_joined emitido para o Host da sala ${roomCode}`);
 
                     // Notifica o novo jogador que ele é as Pretas
                     socket.emit('game_start', {
@@ -127,6 +140,9 @@ module.exports = (io) => {
         // ==================== FAZER JOGADA ====================
         socket.on('make_move', async ({ code, move }) => {
             try {
+                if (!code || code === 'LOCAL') return;
+                console.log(`♟️ [MOVE] Tentativa de jogada na sala ${code}:`, move);
+                
                 const game = await Game.findOne({ where: { roomCode: code } });
                 if (!game || game.status !== 'playing' || game.paused) {
                     return socket.emit('error_message', 'Partida indisponível ou pausada.');
@@ -135,14 +151,26 @@ module.exports = (io) => {
                 const chess = new Chess();
                 const standardFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
                 
-                if (game.pgn) {
-                    chess.loadPgn(game.pgn);
-                } else if (game.fen && game.fen !== standardFen) {
-                    chess.load(game.fen);
+                try {
+                    if (game.pgn) {
+                        chess.loadPgn(game.pgn);
+                    } else if (game.fen && game.fen !== standardFen) {
+                        chess.load(game.fen);
+                    }
+                } catch (pgnErr) {
+                    console.error('⚠️ [DEBUG] Erro ao carregar histórico PGN:', pgnErr.message);
+                    if (game.fen) chess.load(game.fen); // Fallback robusto para FEN
                 }
                 const result = chess.move(move);
 
-                if (!result) return socket.emit('error_message', 'Movimento inválido.');
+                if (!result) {
+                    console.warn(`⚠️ [MOVE] Jogada inválida recusada na sala ${code}:`, move);
+                    // Reversão: Notifica o cliente para reverter o estado visual
+                    socket.emit('move_rejected', { fen: game.fen });
+                    return socket.emit('error_message', 'Movimento inválido.');
+                }
+                
+                console.log(`✅ [MOVE] Jogada validada: ${result.san} na sala ${code}`);
 
                 const now = new Date();
                 let whiteTime = game.timerWhite;
@@ -241,6 +269,44 @@ module.exports = (io) => {
                 io.to(code).emit('pause_updated', { paused: newPaused });
             } catch (e) {
                 console.error('Erro ao pausar:', e);
+            }
+        });
+
+        // ==================== BUSCA DE OPONENTES ====================
+        socket.on('get_public_rooms', async () => {
+            try {
+                const rooms = await Game.findAll({
+                    where: {
+                        isPublic: true,
+                        status: 'playing',
+                        blackSessionId: null
+                    },
+                    order: [['updatedAt', 'DESC']],
+                    limit: 10
+                });
+
+                socket.emit('public_rooms_list', rooms.map(r => ({
+                    code: r.roomCode,
+                    turn: r.turn,
+                    timerWhite: r.timerWhite,
+                    timerBlack: r.timerBlack,
+                    fen: r.fen,
+                    updatedAt: r.updatedAt
+                })));
+            } catch (e) {
+                console.error('Erro ao buscar salas públicas:', e);
+            }
+        });
+
+        socket.on('toggle_public', async ({ code, isPublic }) => {
+            try {
+                const game = await Game.findOne({ where: { roomCode: code } });
+                if (!game) return;
+
+                await game.update({ isPublic: !!isPublic });
+                socket.emit('public_status_updated', { isPublic: !!isPublic });
+            } catch (e) {
+                console.error('Erro ao mudar visibilidade:', e);
             }
         });
 

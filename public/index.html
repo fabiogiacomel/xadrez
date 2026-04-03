@@ -81,6 +81,18 @@
                         <button id="start-game-btn" class="btn-primary btn-large">
                             INICIAR NOVA PARTIDA
                         </button>
+                        <button id="search-opponent-btn" class="btn-secondary btn-large">
+                            BUSCAR OPONENTE
+                        </button>
+                    </div>
+
+                    <!-- Lista de Salas Públicas -->
+                    <div id="public-rooms-section" class="public-rooms-card" hidden>
+                        <h3 class="section-subtitle">Oponentes Aguardando</h3>
+                        <div id="public-rooms-list" class="rooms-list">
+                            <p class="empty-msg">Buscando salas disponíveis...</p>
+                        </div>
+                        <button id="refresh-rooms-btn" class="btn-text">🔄 Atualizar Lista</button>
                     </div>
 
                     <div id="room-code-container" class="code-display" hidden>
@@ -176,6 +188,7 @@
                         <div class="game-mgmt-controls">
                             <button id="add-5m-btn" class="btn-control" title="Adicionar 5 minutos">+5 min</button>
                             <button id="pause-timer-btn" class="btn-control">⏸ Pausar</button>
+                            <button id="toggle-public-btn" class="btn-control" title="Tornar partida pública">🌍 Público</button>
                             <button id="download-summary-btn" class="btn-control">↓ Súmula</button>
                             <button id="save-game-btn" class="btn-control">💾 Salvar</button>
                         </div>
