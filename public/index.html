@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Xadrez online premium: jogue com amigos em tempo real com interface moderna e visual deslumbrante.">
+    <meta name="description"
+        content="Xadrez online premium: jogue com amigos em tempo real com interface moderna e visual deslumbrante.">
     <meta name="theme-color" content="#1a1a1a">
 
     <!-- Anti-Cache Meta Tags -->
@@ -16,8 +18,9 @@
     <title>Xadrez Premium | Giacomel Art</title>
 
     <!-- Preload de recursos críticos -->
-    <link rel="preload" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" as="style">
-    
+    <link rel="preload" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+        as="style">
+
     <!-- CSS (with Cache Busting) -->
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <link rel="stylesheet" href="css/style.css?v=20260402_1735">
@@ -25,10 +28,13 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Outfit:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap"
+        rel="stylesheet">
 
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♟</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♟</text></svg>">
 
     <!-- SEO + PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -37,7 +43,7 @@
 
 <body>
     <div class="app-container">
-        
+
         <!-- HEADER -->
         <header class="main-header">
             <div class="header-content">
@@ -70,7 +76,7 @@
             <section id="welcome-screen" class="screen active">
                 <div class="card">
                     <h2 class="screen-title">Bem-vindo ao Xadrez</h2>
-                    
+
                     <div class="mode-buttons">
                         <button id="start-game-btn" class="btn-primary btn-large">
                             INICIAR NOVA PARTIDA
@@ -90,7 +96,8 @@
                     <div class="join-section">
                         <label for="join-code-input">Entrar em sala existente</label>
                         <div class="input-group">
-                            <input type="text" id="join-code-input" maxlength="6" placeholder="Digite o código" autocomplete="off">
+                            <input type="text" id="join-code-input" maxlength="6" placeholder="Digite o código"
+                                autocomplete="off">
                             <button id="join-btn" class="btn-secondary">ENTRAR</button>
                         </div>
                     </div>
@@ -104,12 +111,13 @@
                     <input type="file" id="restore-session-input" accept=".json" hidden>
                 </div>
             </section>
-            
+
             <!-- TELA SOBRE -->
             <section id="about-screen" class="screen">
                 <div class="card">
                     <h2 class="screen-title">Sobre o Projeto</h2>
-                    <p>Este é um projeto de Xadrez Premium desenvolvido para demonstrar capacidades avançadas de interface e sincronização em tempo real.</p>
+                    <p>Este é um projeto de Xadrez Premium desenvolvido para demonstrar capacidades avançadas de
+                        interface e sincronização em tempo real.</p>
                     <p>Desenvolvido por Giacomel Art.</p>
                     <button class="btn-secondary" onclick="showScreen('welcome-screen')">Voltar</button>
                 </div>
@@ -118,7 +126,7 @@
             <!-- TELA DO JOGO -->
             <section id="game-screen" class="screen">
                 <div class="game-layout">
-                    
+
                     <!-- TABULEIRO -->
                     <div class="board-column">
                         <div class="board-container">
@@ -191,6 +199,7 @@
     <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/app.js?v=20260402_2333" defer></script>
+    <script src="js/app.js?v=20260402_1735" defer></script>
 </body>
+
 </html>

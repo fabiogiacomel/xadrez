@@ -198,6 +198,7 @@ module.exports = (io) => {
                 io.to(code).emit('move_made', {
                     fen: chess.fen(),
                     move: result,
+                    pgn: chess.pgn(),
                     timers: { w: whiteTime, b: blackTime },
                     turn: chess.turn(),
                     status,

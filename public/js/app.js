@@ -62,10 +62,10 @@ window.App = {
 
             s.on('room_created', (data) => {
                 console.log('📡 [DEBUG] Sala criada no servidor:', data.code);
-                this.updateState({ 
-                    myRoomCode: data.code, 
-                    playerColor: data.color || 'w', 
-                    statusText: (this.state.isLocalMode) ? 'Modo Local (Sincronizado)' : 'Aguardando oponente...' 
+                this.updateState({
+                    myRoomCode: data.code,
+                    playerColor: data.color || 'w',
+                    statusText: (this.state.isLocalMode) ? 'Modo Local (Sincronizado)' : 'Aguardando oponente...'
                 });
                 // Só inicializa se o tabuleiro ainda não existir
                 if (!this.state.board) {
@@ -76,17 +76,13 @@ window.App = {
 
             s.on('game_start', (data) => {
                 console.log('🎮 [DEBUG] Partida iniciada online.');
-                this.updateState({ myRoomCode: data.code, isLocalMode: (data.playerColor === undefined), playerColor: data.playerColor || 'w', timers: data.timers || { w: 600, b:600 }, statusText: 'Partida iniciada!' });
+                this.updateState({ myRoomCode: data.code, isLocalMode: (data.playerColor === undefined), playerColor: data.playerColor || 'w', timers: data.timers || { w: 600, b: 600 }, statusText: 'Partida iniciada!' });
                 this.initBoard(data.fen);
                 this.startClock();
             });
 
             s.on('move_made', (data) => {
-                if (data.pgn) {
-                    this.state.game.load_pgn(data.pgn);
-                } else if (data.fen) {
-                    this.state.game.load(data.fen);
-                }
+                if (data.fen) this.state.game.load(data.fen);
                 this.updateState({ isWaitingForServer: false, timers: data.timers || this.state.timers, isGameOver: data.status === 'finished' });
                 if (this.state.board) this.state.board.position(this.state.game.fen());
                 this.render();
@@ -164,7 +160,7 @@ window.App = {
 
     render() {
         const isGameStarted = (this.state.myRoomCode !== null);
-        
+
         ['welcome-screen', 'game-screen', 'about-screen'].forEach(s => {
             const el = document.getElementById(s);
             if (!el) return;
@@ -189,11 +185,8 @@ window.App = {
             gameCodeSpan.innerText = (this.state.myRoomCode && !hideCodes.includes(this.state.myRoomCode)) ? this.state.myRoomCode : '';
         }
 
-        if (pgnLog) {
-            // Remove os cabeçalhos [Event...], [Site...], [SetUp...], [FEN...] etc. que aparecem ao carregar FEN
-            const movesOnly = this.state.game.pgn().replace(/\[.*?\]\n?/g, '').trim();
-            pgnLog.innerText = movesOnly || 'Nenhum movimento ainda.';
-        }
+        const pgnLog = document.getElementById('pgn-log');
+        if (pgnLog) pgnLog.innerText = this.state.game.pgn();
 
         this.renderTimers();
         this.renderCapturedPieces();
@@ -248,20 +241,20 @@ window.App = {
         listen('start-game-btn', 'click', () => {
             console.log('🖱️ [DEBUG] Click em INICIAR!');
             // Força a transição imediata para o modo local
-            this.updateState({ 
-                myRoomCode: 'LOCAL', 
-                isLocalMode: true, 
+            this.updateState({
+                myRoomCode: 'LOCAL',
+                isLocalMode: true,
                 statusText: 'Iniciando partida...',
-                showAbout: false 
+                showAbout: false
             });
             this.initBoard();
             this.startClock();
-            
+
             // Tenta avisar o servidor para persistência (não bloqueia se falhar)
             if (this.socket) {
-                this.socket.emit('create_room', { 
-                    settings: { local: true }, 
-                    sessionId: this.state.sessionId 
+                this.socket.emit('create_room', {
+                    settings: { local: true },
+                    sessionId: this.state.sessionId
                 });
             }
         });
