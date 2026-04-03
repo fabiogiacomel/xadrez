@@ -82,7 +82,7 @@ window.App = {
             });
 
             s.on('move_made', (data) => {
-                if (data.fen) this.state.game.load(data.fen);
+                if (data.pgn) { this.state.game.load_pgn(data.pgn); } else if (data.fen) { this.state.game.load(data.fen); }
                 this.updateState({ isWaitingForServer: false, timers: data.timers || this.state.timers, isGameOver: data.status === 'finished' });
                 if (this.state.board) this.state.board.position(this.state.game.fen());
                 this.render();
@@ -186,7 +186,7 @@ window.App = {
         }
 
         const pgnLog = document.getElementById('pgn-log');
-        if (pgnLog) pgnLog.innerText = this.state.game.pgn();
+        if (pgnLog) { const movesOnly = this.state.game.pgn().replace(/\\[.*?\\]/g, '').trim(); pgnLog.innerText = movesOnly || 'Nenhum movimento ainda.'; }
 
         this.renderTimers();
         this.renderCapturedPieces();
