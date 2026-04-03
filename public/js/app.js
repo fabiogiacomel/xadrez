@@ -82,7 +82,11 @@ window.App = {
             });
 
             s.on('move_made', (data) => {
-                if (data.fen) this.state.game.load(data.fen);
+                if (data.pgn) {
+                    this.state.game.load_pgn(data.pgn);
+                } else if (data.fen) {
+                    this.state.game.load(data.fen);
+                }
                 this.updateState({ isWaitingForServer: false, timers: data.timers || this.state.timers, isGameOver: data.status === 'finished' });
                 if (this.state.board) this.state.board.position(this.state.game.fen());
                 this.render();
@@ -185,8 +189,11 @@ window.App = {
             gameCodeSpan.innerText = (this.state.myRoomCode && !hideCodes.includes(this.state.myRoomCode)) ? this.state.myRoomCode : '';
         }
 
-        const pgnLog = document.getElementById('pgn-log');
-        if (pgnLog) pgnLog.innerText = this.state.game.pgn();
+        if (pgnLog) {
+            // Remove os cabeçalhos [Event...], [Site...], [SetUp...], [FEN...] etc. que aparecem ao carregar FEN
+            const movesOnly = this.state.game.pgn().replace(/\[.*?\]\n?/g, '').trim();
+            pgnLog.innerText = movesOnly || 'Nenhum movimento ainda.';
+        }
 
         this.renderTimers();
         this.renderCapturedPieces();
